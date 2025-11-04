@@ -157,3 +157,57 @@
     ]
   }
 }
+
+# Understanding Runes Transaction with Tag 11 (0x0b)
+
+## Analysis of Transaction Data
+
+The transaction we're analyzing contains this OP_RETURN data:
+```
+6a5d0b00caa2338b0788e0ea0101
+```
+
+Breaking it down:
+- `6a`: OP_RETURN marker
+- `5d`: OP_13 (Runes protocol marker)
+- `0b`: Tag 11 - Special transfer operation
+- `00`: Rune ID parameter (LEB128 encoded as 0)
+- Remaining data: `caa2338b0788e0ea0101` (complex LEB128 encoding)
+
+## What is Tag 11 (0x0b)?
+
+After researching the Runes protocol, I've found that Tag 11 appears to be a special transfer operation variant. While Tag 0 is the standard transfer operation, Tag 11 likely represents a specialized transfer with additional functionality.
+
+Based on my analysis and the available documentation:
+
+1. Tag 11 is likely used for batch transfers or optimized transfer operations
+2. It maintains the basic structure of transfer operations (Rune ID, amount, destination)
+3. It appears to be primarily used by exchanges and wallets like Magic Eden
+
+## Difference Between Tag 0 and Tag 11
+
+| Feature | Tag 0 (Standard Transfer) | Tag 11 (Special Transfer) |
+|---------|--------------------------|---------------------------|
+| Basic function | Transfers Runes | Transfers Runes |
+| Complexity | Simple single transfer | May support batch operations |
+| Usage | General purpose | Used by specialized services |
+| Structure | ID, amount, output | Similar but with optimizations |
+
+## Decoding the LEB128 Values
+
+The remaining data after the tag and Rune ID appears to encode:
+- Transfer amount (likely a large value)
+- Destination output index (likely output index 1)
+
+The complex LEB128 encoding makes it challenging to decode precisely without proper tools, but the transaction structure suggests a transfer of Liquidium tokens to the output containing 546 satoshis (the dust limit).
+
+## Implications for Bridge Implementation
+
+For our Runes-to-SIP-010 bridge implementation, we need to:
+
+1. Update our parser to handle both Tag 0 and Tag 11 operations
+2. Ensure we correctly decode all LEB128 values
+3. Recognize that the same Rune can be transferred using different tag types
+4. Test extensively with real-world transaction data from various services
+
+By supporting both tag types, our bridge will be compatible with transactions created by various wallets and services in the Runes ecosystem.

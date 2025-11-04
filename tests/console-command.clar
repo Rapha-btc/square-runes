@@ -25,3 +25,36 @@
 
 ;; Direct decoding test to see all parsed values
 (contract-call? .leb128-decoder test-decode-runestone-parts 0x6a5d0082b49d01640164)
+
+
+;; ===
+
+To test the updated Runes decoder in the Clarinet console, you'll want to use the following commands:
+
+1. First, make sure your contract is deployed in the Clarinet environment:
+   ```
+   (contract-call? .runes-decoder decode-any-runestone 0x6a5d0b00caa2338b0788e0ea0101)
+   ```
+
+2. To test specifically with your Magic Eden transaction:
+   ```
+   (contract-call? .runes-decoder decode-any-runestone 0x6a5d0b00caa2338b0788e0ea0101)
+   ```
+
+3. To check if it's a valid runestone and determine the tag:
+   ```
+   (contract-call? .runes-decoder get-runestone-tag 0x6a5d0b00caa2338b0788e0ea0101)
+   ```
+
+4. To test parsing with specific expected values:
+   ```
+   (contract-call? .runes-decoder parse-runes-transfer 0x6a5d0b00caa2338b0788e0ea0101 u0 u0 u1)
+   ```
+   This checks if the transaction is transferring Rune ID 0:0 to output 1.
+
+5. If you want to compare with the previous implementation, you can still use:
+   ```
+   (contract-call? .leb128-decoder test-decode-runestone-parts 0x6a5d0b00caa2338b0788e0ea0101)
+   ```
+
+The most informative test will be the first one using `decode-any-runestone`, as it makes the fewest assumptions about the structure and will show you all the decoded LEB128 values in the transaction.
