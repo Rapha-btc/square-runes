@@ -2,8 +2,8 @@
 ;; LEB128 Decoder for Runes Protocol
 ;; ============================================================================
 
-(define-constant ERR-LEB128-OUT-OF-BOUNDS (err u1000))
-(define-constant ERR-LEB128-OVERFLOW (err u1001))
+(define-constant ERR-LEB128-OUT-OF-BOUNDS u1000)
+(define-constant ERR-LEB128-OVERFLOW u1001)
 
 ;; Read a single byte as uint8, returning the value and updated offset
 (define-read-only (read-byte (data (buff 4096)) (offset uint))
@@ -19,6 +19,10 @@
   )
 )
 
+    ;;   uint8: (buff-to-uint-le (unwrap-panic (as-max-len?
+    ;;     (unwrap! (slice? data base (+ base u1)) (err ERR-OUT-OF-BOUNDS)) u1
+    ;;   ))),
+
 ;; Decode a LEB128 integer
 (define-read-only (decode-leb128 (data (buff 4096)) (start-offset uint))
   ;; Read first byte
@@ -26,7 +30,7 @@
       (byte1-result (try! (read-byte data start-offset)))
       (byte1 (get byte byte1-result))  ;; Changed from 'byte1' to 'byte'
       (offset1 (get next-offset byte1-result))
-      (data-bits1 (bit-and byte1 0x7f))
+      (data-bits1 (bit-and byte1 u1)) ;; 0x7f))
       (has-more1 (> (bit-and byte1 0x80) u0))
     )
     (if (not has-more1)
