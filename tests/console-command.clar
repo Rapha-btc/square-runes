@@ -21,5 +21,7 @@
 ;; With print statements to debug
 (contract-call? .leb128-decoder parse-simple-runes-transfer 0x6a5d0082b49d01640164 u2578946 u100 u100)
 
+;; Send 1 unit of Rune 2578946:100 to output #100 of this transaction"
+
 ;; Direct decoding test to see all parsed values
 (contract-call? .leb128-decoder test-decode-runestone-parts 0x6a5d0082b49d01640164)
