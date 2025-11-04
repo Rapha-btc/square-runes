@@ -1,9 +1,8 @@
 ;; ============================================================================
-;; LEB128 Decoder for Runes Protocol
+;; LEB128 Decoder - With decimal literals instead of hex
 ;; ============================================================================
 
 (define-constant ERR-LEB128-OUT-OF-BOUNDS u1000)
-(define-constant ERR-LEB128-OVERFLOW u1001)
 
 ;; Read a single byte as uint8, returning the value and updated offset
 (define-read-only (read-byte (data (buff 4096)) (offset uint))
@@ -19,19 +18,16 @@
   )
 )
 
-    ;;   uint8: (buff-to-uint-le (unwrap-panic (as-max-len?
-    ;;     (unwrap! (slice? data base (+ base u1)) (err ERR-OUT-OF-BOUNDS)) u1
-    ;;   ))),
-
 ;; Decode a LEB128 integer
 (define-read-only (decode-leb128 (data (buff 4096)) (start-offset uint))
   ;; Read first byte
   (let (
       (byte1-result (try! (read-byte data start-offset)))
-      (byte1 (get byte byte1-result))  ;; Changed from 'byte1' to 'byte'
+      (byte1 (get byte byte1-result))
       (offset1 (get next-offset byte1-result))
-      (data-bits1 (bit-and byte1 u1)) ;; 0x7f))
-      (has-more1 (> (bit-and byte1 0x80) u0))
+      ;; Using decimal literals instead of hex
+      (data-bits1 (bit-and byte1 u127))  ;; u127 instead of 0x7f
+      (has-more1 (> (bit-and byte1 u128) u0))  ;; u128 instead of 0x80
     )
     (if (not has-more1)
       ;; Single byte value
@@ -40,10 +36,10 @@
       ;; Read second byte
       (let (
           (byte2-result (try! (read-byte data offset1)))
-          (byte2 (get byte byte2-result))  ;; Using 'byte' field name
+          (byte2 (get byte byte2-result))
           (offset2 (get next-offset byte2-result))
-          (data-bits2 (bit-and byte2 0x7f))
-          (has-more2 (> (bit-and byte2 0x80) u0))
+          (data-bits2 (bit-and byte2 u127))
+          (has-more2 (> (bit-and byte2 u128) u0))
           (value12 (+ data-bits1 (* data-bits2 (pow u2 u7))))
         )
         (if (not has-more2)
@@ -53,10 +49,10 @@
           ;; Read third byte
           (let (
               (byte3-result (try! (read-byte data offset2)))
-              (byte3 (get byte byte3-result))  ;; Using 'byte' field name
+              (byte3 (get byte byte3-result))
               (offset3 (get next-offset byte3-result))
-              (data-bits3 (bit-and byte3 0x7f))
-              (has-more3 (> (bit-and byte3 0x80) u0))
+              (data-bits3 (bit-and byte3 u127))
+              (has-more3 (> (bit-and byte3 u128) u0))
               (value123 (+ value12 (* data-bits3 (pow u2 u14))))
             )
             (if (not has-more3)
@@ -66,9 +62,9 @@
               ;; Read fourth byte
               (let (
                   (byte4-result (try! (read-byte data offset3)))
-                  (byte4 (get byte byte4-result))  ;; Using 'byte' field name
+                  (byte4 (get byte byte4-result))
                   (offset4 (get next-offset byte4-result))
-                  (data-bits4 (bit-and byte4 0x7f))
+                  (data-bits4 (bit-and byte4 u127))
                   (value1234 (+ value123 (* data-bits4 (pow u2 u21))))
                 )
                 ;; Four byte value
