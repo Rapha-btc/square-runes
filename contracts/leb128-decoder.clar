@@ -5,63 +5,70 @@
 (define-constant ERR-LEB128-OUT-OF-BOUNDS (err u1000))
 (define-constant ERR-LEB128-OVERFLOW (err u1001))
 
-;; Decode a single LEB128-encoded integer
-;; Returns: (ok { value: uint, next-offset: uint })
-(define-read-only (decode-leb128 (data (buff 4096)) (start-offset uint))
-  ;; Bounds check
-  (if (>= start-offset (len data))
+;; Read a single byte as uint8, returning the value and updated offset
+(define-read-only (read-byte (data (buff 4096)) (offset uint))
+  (if (>= offset (len data))
     (err ERR-LEB128-OUT-OF-BOUNDS)
-    
-    ;; Read first byte
-    (let (
-        (byte1 (unwrap! (element-at data start-offset) (err ERR-LEB128-OUT-OF-BOUNDS)))
-        ;; Assuming we could convert byte1 to uint:
-        (data-bits1 (bit-and byte1 0x7f))
-        (has-more1 (> (bit-and byte1 0x80) u0))
-      )
-      (if (not has-more1)
-        ;; Single byte value
-        (ok { value: data-bits1, next-offset: (+ start-offset u1) })
-        
-        ;; Multiple bytes
-        (if (>= (+ start-offset u1) (len data))
-          (err ERR-LEB128-OUT-OF-BOUNDS)
+    (ok {
+      byte: (buff-to-uint-le (unwrap-panic (as-max-len?
+        (unwrap! (slice? data offset (+ offset u1)) (err ERR-LEB128-OUT-OF-BOUNDS))
+        u1
+      ))),
+      next-offset: (+ offset u1)
+    })
+  )
+)
+
+;; Decode a LEB128 integer
+(define-read-only (decode-leb128 (data (buff 4096)) (start-offset uint))
+  ;; Read first byte
+  (let (
+      (byte1-result (try! (read-byte data start-offset)))
+      (byte1 (get byte byte1-result))  ;; Changed from 'byte1' to 'byte'
+      (offset1 (get next-offset byte1-result))
+      (data-bits1 (bit-and byte1 0x7f))
+      (has-more1 (> (bit-and byte1 0x80) u0))
+    )
+    (if (not has-more1)
+      ;; Single byte value
+      (ok { value: data-bits1, next-offset: offset1 })
+      
+      ;; Read second byte
+      (let (
+          (byte2-result (try! (read-byte data offset1)))
+          (byte2 (get byte byte2-result))  ;; Using 'byte' field name
+          (offset2 (get next-offset byte2-result))
+          (data-bits2 (bit-and byte2 0x7f))
+          (has-more2 (> (bit-and byte2 0x80) u0))
+          (value12 (+ data-bits1 (* data-bits2 (pow u2 u7))))
+        )
+        (if (not has-more2)
+          ;; Two byte value
+          (ok { value: value12, next-offset: offset2 })
+          
+          ;; Read third byte
           (let (
-              (byte2 (unwrap! (element-at data (+ start-offset u1)) (err ERR-LEB128-OUT-OF-BOUNDS)))
-              (data-bits2 (bit-and byte2 0x7f))
-              (has-more2 (> (bit-and byte2 0x80) u0))
-              (value12 (+ data-bits1 (* data-bits2 (pow u2 u7))))
+              (byte3-result (try! (read-byte data offset2)))
+              (byte3 (get byte byte3-result))  ;; Using 'byte' field name
+              (offset3 (get next-offset byte3-result))
+              (data-bits3 (bit-and byte3 0x7f))
+              (has-more3 (> (bit-and byte3 0x80) u0))
+              (value123 (+ value12 (* data-bits3 (pow u2 u14))))
             )
-            (if (not has-more2)
-              ;; Two byte value
-              (ok { value: value12, next-offset: (+ start-offset u2) })
+            (if (not has-more3)
+              ;; Three byte value
+              (ok { value: value123, next-offset: offset3 })
               
-              ;; Three or more bytes
-              (if (>= (+ start-offset u2) (len data))
-                (err ERR-LEB128-OUT-OF-BOUNDS)
-                (let (
-                    (byte3 (unwrap! (element-at data (+ start-offset u2)) (err ERR-LEB128-OUT-OF-BOUNDS)))
-                    (data-bits3 (bit-and byte3 0x7f))
-                    (has-more3 (> (bit-and byte3 0x80) u0))
-                    (value123 (+ value12 (* data-bits3 (pow u2 u14))))
-                  )
-                  (if (not has-more3)
-                    ;; Three byte value
-                    (ok { value: value123, next-offset: (+ start-offset u3) })
-                    
-                    ;; Four byte value
-                    (if (>= (+ start-offset u3) (len data))
-                      (err ERR-LEB128-OUT-OF-BOUNDS)
-                      (let (
-                          (byte4 (unwrap! (element-at data (+ start-offset u3)) (err ERR-LEB128-OUT-OF-BOUNDS)))
-                          (data-bits4 (bit-and byte4 0x7f))
-                          (value1234 (+ value123 (* data-bits4 (pow u2 u21))))
-                        )
-                        (ok { value: value1234, next-offset: (+ start-offset u4) })
-                      )
-                    )
-                  )
+              ;; Read fourth byte
+              (let (
+                  (byte4-result (try! (read-byte data offset3)))
+                  (byte4 (get byte byte4-result))  ;; Using 'byte' field name
+                  (offset4 (get next-offset byte4-result))
+                  (data-bits4 (bit-and byte4 0x7f))
+                  (value1234 (+ value123 (* data-bits4 (pow u2 u21))))
                 )
+                ;; Four byte value
+                (ok { value: value1234, next-offset: offset4 })
               )
             )
           )
