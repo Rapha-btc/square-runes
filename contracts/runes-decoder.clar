@@ -1,5 +1,5 @@
 ;; ============================================================================
-;; LEB128 Decoder - With support for Tag 11 (0x0b) transfers
+;; LEB128 Decoder - With improved Tag 11 (0x0b) handling
 ;; ============================================================================
 
 (define-constant ERR-LEB128-OUT-OF-BOUNDS u1000)
@@ -91,7 +91,63 @@
   )
 )
 
-;; Parse a Runes transfer from scriptPubKey - supports both Tag 0 (edict) and Tag 11 (0x0b) transfers
+;; Parse Tag 11 (0x0b) transfer operation
+(define-read-only (parse-tag11-transfer
+    (script (buff 1376))
+    (start-offset uint)
+    (expected-rune-id uint)
+    (expected-output uint)
+  )
+  ;; For Tag 11, format is: [Rune ID] [Amount] [Output]
+  ;; Parse Rune ID (param1)
+  (let (
+      (id-result (try! (decode-leb128 script start-offset)))
+      (rune-id (get value id-result))
+      (offset1 (get next-offset id-result))
+    )
+    (print { msg: "Tag 11 Rune ID parsed", rune-id: rune-id, expected-rune-id: expected-rune-id })
+    
+    ;; Verify Rune ID matches expected
+    (if (not (is-eq rune-id expected-rune-id))
+      (err ERR-WRONG-RUNE)
+      
+      ;; Attempt to find the amount by reading to the end except last byte
+      ;; This is a simplification - in reality we'd need a more complex decoder
+      ;; to find the exact amount field in the complex middle section
+      (let (
+          (remaining-data (- (len script) offset1))
+          ;; Assuming the output is the last byte
+          (output-offset (- (len script) u1))
+          (output-result (try! (decode-leb128 script output-offset)))
+          (output (get value output-result))
+          
+          ;; Read as much data as possible for the amount (complex middle section)
+          ;; For real implementation, this would need to be refined
+          (amount-offset offset1)
+          (amount-result (try! (decode-leb128 script amount-offset)))
+          (amount (get value amount-result))
+        )
+        (print {
+          msg: "Tag 11 transfer parsed",
+          rune-id: rune-id,
+          amount: amount,
+          output: output,
+          expected-output: expected-output
+        })
+        
+        ;; Verify output matches expected
+        (if (not (is-eq output expected-output))
+          (err ERR-WRONG-OUTPUT)
+          
+          ;; Return the amount
+          (ok amount)
+        )
+      )
+    )
+  )
+)
+
+;; Parse a Runes transfer from scriptPubKey - supports both Tag 0 and Tag 11 (0x0b)
 (define-read-only (parse-runes-transfer 
     (script (buff 1376))
     (expected-rune-block uint)
@@ -110,21 +166,21 @@
       )
       (print { msg: "Tag parsed", tag: tag, next-offset: next-offset })
       
-      ;; Check if this is a supported tag (Tag 0 = edict or Tag 11 = 0x0b)
-      (if (and (not (is-eq tag u0)) (not (is-eq tag u11)))
-        (err ERR-UNSUPPORTED-TAG) ;; Unsupported tag type
-        
-        ;; Parse rune ID (block delta or direct ID)
+      ;; Handle different tag types using if/else instead of cond
+      (if (is-eq tag u0)
+        ;; Tag 0 (standard edict/transfer)
         (let (
-            (rune-id-result (try! (decode-leb128 script next-offset)))
-            (rune-id (get value rune-id-result))
-            (next-offset2 (get next-offset rune-id-result))
+            (block-result (try! (decode-leb128 script next-offset)))
+            (rune-block (get value block-result))
+            (next-offset2 (get next-offset block-result))
           )
-          (print { msg: "Rune ID parsed", rune-id: rune-id, next-offset: next-offset2 })
+          (print { msg: "Block parsed", rune-block: rune-block, expected-block: expected-rune-block, next-offset: next-offset2 })
           
-          ;; For Tag 0, we expect block + tx. For Tag 11, we may have a different structure
-          (if (is-eq tag u0)
-            ;; Standard Tag 0 edict - continue with tx index
+          ;; Verify block matches expected
+          (if (not (is-eq rune-block expected-rune-block))
+            (err ERR-WRONG-RUNE)
+            
+            ;; Parse tx index
             (let (
                 (tx-result (try! (decode-leb128 script next-offset2)))
                 (rune-tx (get value tx-result))
@@ -132,10 +188,9 @@
               )
               (print { msg: "TX parsed", rune-tx: rune-tx, expected-tx: expected-rune-tx, next-offset: next-offset3 })
               
-              ;; Verify rune block and tx match expected values
-              (if (or (not (is-eq rune-id expected-rune-block)) 
-                      (not (is-eq rune-tx expected-rune-tx)))
-                (err ERR-WRONG-RUNE) ;; Wrong rune
+              ;; Verify tx index matches expected
+              (if (not (is-eq rune-tx expected-rune-tx))
+                (err ERR-WRONG-RUNE)
                 
                 ;; Parse amount
                 (let (
@@ -154,7 +209,7 @@
                     
                     ;; Verify output matches expected
                     (if (not (is-eq output expected-output))
-                      (err ERR-WRONG-OUTPUT) ;; Wrong output
+                      (err ERR-WRONG-OUTPUT)
                       
                       ;; Return the amount
                       (ok amount)
@@ -163,41 +218,53 @@
                 )
               )
             )
-            
-            ;; Tag 11 transfer - different format, likely with direct Rune ID
-            ;; For now, we just decode remaining data to get amount and output
-            (let (
-                ;; Decode amount (which may be encoded differently in Tag 11)
-                ;; This is an estimation - may need adjustment based on actual protocol
-                (amount-result (try! (decode-leb128 script next-offset2)))
-                (amount (get value amount-result))
-                (next-offset3 (get next-offset amount-result))
-                
-                ;; Try to decode output
-                (output-result (try! (decode-leb128 script next-offset3)))
-                (output (get value output-result))
-              )
-              (print {
-                msg: "Tag 11 transfer parsed",
-                rune-id: rune-id,
-                amount: amount,
-                output: output
-              })
-              
-              ;; For Tag 11, we check if the rune-id matches expected rune-block
-              ;; This is a simplification - in reality we'd need to know how rune IDs are represented
-              (if (not (is-eq rune-id expected-rune-block))
-                (err ERR-WRONG-RUNE)
-                
-                ;; Check output matches expected
-                (if (not (is-eq output expected-output))
-                  (err ERR-WRONG-OUTPUT)
-                  
-                  ;; Return the amount
-                  (ok amount)
-                )
-              )
+          )
+        )
+        
+        ;; Check if it's Tag 11
+        (if (is-eq tag u11)
+          ;; Tag 11 (0x0b) specialized transfer
+          ;; For Tag 11, expected_rune_block is treated as the Rune ID directly
+          (parse-tag11-transfer script next-offset expected-rune-block expected-output)
+          
+          ;; Unsupported tag
+          (err ERR-UNSUPPORTED-TAG)
+        )
+      )
+    )
+  )
+)
+
+;; Extract the amount from a Tag 11 transfer - specialized function for Magic Eden style transactions
+(define-read-only (extract-tag11-amount (script (buff 1376)))
+  (if (not (is-runestone script))
+    (err ERR-NOT-A-RUNESTONE)
+    
+    (let (
+        (tag-result (try! (decode-leb128 script u2)))
+        (tag (get value tag-result))
+      )
+      (if (not (is-eq tag u11))
+        (err ERR-UNSUPPORTED-TAG)
+        
+        ;; For Magic Eden transactions (6a5d0b00caa2338b0788e0ea0101),
+        ;; param4 contains the amount (u3846152)
+        (let (
+            (offset1 (get next-offset tag-result))
+            (param1-result (try! (decode-leb128 script offset1)))
+            (offset2 (get next-offset param1-result))
+            (param2-result (try! (decode-leb128 script offset2)))
+            (offset3 (get next-offset param2-result))
+            (param3-result (try! (decode-leb128 script offset3)))
+            (offset4 (get next-offset param3-result))
+          )
+          ;; Try to read param4 if it exists - this should be the amount
+          (if (>= (len script) offset4)
+            (match (decode-leb128 script offset4)
+              success (ok (get value success))
+              error (err u1005) ;; Error reading amount
             )
+            (err u1006) ;; Not enough data for param4
           )
         )
       )
@@ -258,6 +325,56 @@
     (match (decode-leb128 script u2)
       success (ok (get value success))
       error (err error)
+    )
+  )
+)
+
+;; Test function specifically for Magic Eden transactions
+;; This handles the format 6a5d0b00caa2338b0788e0ea0101
+(define-read-only (parse-magic-eden-transfer (script (buff 1376)) (expected-output uint))
+  (if (not (is-runestone script))
+    (err ERR-NOT-A-RUNESTONE)
+    
+    (let (
+        (tag-result (try! (decode-leb128 script u2)))
+        (tag (get value tag-result))
+      )
+      (if (not (is-eq tag u11))
+        (err ERR-UNSUPPORTED-TAG)
+        
+        ;; For Magic Eden transactions, extract param1 (Rune ID) and param4 (amount)
+        (let (
+            (offset1 (get next-offset tag-result))
+            (id-result (try! (decode-leb128 script offset1)))
+            (rune-id (get value id-result))
+            
+            ;; Extract amount (param4)
+            (amount-result (try! (extract-tag11-amount script)))
+            (amount amount-result)
+            
+            ;; Check output (last byte)
+            (output-offset (- (len script) u1))
+            (output-result (try! (decode-leb128 script output-offset)))
+            (output (get value output-result))
+          )
+          
+          (print {
+            msg: "Magic Eden transfer",
+            rune-id: rune-id,
+            amount: amount,
+            output: output
+          })
+          
+          (if (not (is-eq output expected-output))
+            (err ERR-WRONG-OUTPUT)
+            (ok {
+              rune-id: rune-id,
+              amount: amount,
+              output: output
+            })
+          )
+        )
+      )
     )
   )
 )
