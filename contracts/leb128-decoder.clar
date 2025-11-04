@@ -97,6 +97,7 @@
         (tag (get value tag-result))
         (next-offset (get next-offset tag-result))
       )
+      (print { msg: "Tag parsed", tag: tag, next-offset: next-offset })
       (if (not (is-eq tag u0))
         (err u102) ;; Not an edict
         
@@ -106,6 +107,7 @@
             (rune-block (get value block-result))
             (next-offset2 (get next-offset block-result))
           )
+          (print { msg: "Block parsed", rune-block: rune-block, expected-block: expected-rune-block, next-offset: next-offset2 })
           ;; Verify rune block matches expected
           (if (not (is-eq rune-block expected-rune-block))
             (err u103) ;; Wrong rune
@@ -116,6 +118,7 @@
                 (rune-tx (get value tx-result))
                 (next-offset3 (get next-offset tx-result))
               )
+              (print { msg: "TX parsed", rune-tx: rune-tx, expected-tx: expected-rune-tx, next-offset: next-offset3 })
               ;; Verify rune tx matches expected
               (if (not (is-eq rune-tx expected-rune-tx))
                 (err u103) ;; Wrong rune
@@ -126,11 +129,13 @@
                     (amount (get value amount-result))
                     (next-offset4 (get next-offset amount-result))
                   )
+                  (print { msg: "Amount parsed", amount: amount, next-offset: next-offset4 })
                   ;; Parse output
                   (let (
                       (output-result (try! (decode-leb128 script next-offset4)))
                       (output (get value output-result))
                     )
+                    (print { msg: "Output parsed", output: output, expected-output: expected-output })
                     ;; Verify output matches expected
                     (if (not (is-eq output expected-output))
                       (err u104) ;; Wrong output
@@ -146,5 +151,42 @@
         )
       )
     )
+  )
+)
+
+;; Test function to decode specific parts of the runestone
+(define-read-only (test-decode-runestone-parts (script (buff 1376)))
+  (let (
+      ;; Skip OP_RETURN and OP_13 (0x6a 0x5d)
+      (tag-result (try! (decode-leb128 script u2)))
+      (tag (get value tag-result))
+      (next-offset1 (get next-offset tag-result))
+      
+      ;; Decode block delta
+      (block-result (try! (decode-leb128 script next-offset1)))
+      (block (get value block-result))
+      (next-offset2 (get next-offset block-result))
+      
+      ;; Decode tx index
+      (tx-result (try! (decode-leb128 script next-offset2)))
+      (tx (get value tx-result))
+      (next-offset3 (get next-offset tx-result))
+      
+      ;; Decode amount
+      (amount-result (try! (decode-leb128 script next-offset3)))
+      (amount (get value amount-result))
+      (next-offset4 (get next-offset tx-result))
+      
+      ;; Decode output
+      (output-result (try! (decode-leb128 script next-offset4)))
+      (output (get value output-result))
+    )
+    (ok {
+      tag: tag,
+      block: block,
+      tx: tx,
+      amount: amount,
+      output: output
+    })
   )
 )
