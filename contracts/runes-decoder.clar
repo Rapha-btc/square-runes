@@ -24,18 +24,18 @@
 
 ;; Decode a LEB128 integer
 ;; Decode a LEB128 integer with support for 5 bytes (larger numbers)
+;; Decode a LEB128 integer with support for up to 8 bytes (64-bit numbers)
+;; Decode a LEB128 integer with support for up to 16 bytes (128-bit numbers)
 (define-read-only (decode-leb128 (data (buff 4096)) (start-offset uint))
   ;; Read first byte
   (let (
       (byte1-result (try! (read-byte data start-offset)))
       (byte1 (get byte byte1-result))
       (offset1 (get next-offset byte1-result))
-      ;; Using decimal literals instead of hex
-      (data-bits1 (bit-and byte1 u127))  ;; u127 instead of 0x7f
-      (has-more1 (> (bit-and byte1 u128) u0))  ;; u128 instead of 0x80
+      (data-bits1 (bit-and byte1 u127))
+      (has-more1 (> (bit-and byte1 u128) u0))
     )
     (if (not has-more1)
-      ;; Single byte value
       (ok { value: data-bits1, next-offset: offset1 })
       
       ;; Read second byte
@@ -48,7 +48,6 @@
           (value12 (+ data-bits1 (* data-bits2 (pow u2 u7))))
         )
         (if (not has-more2)
-          ;; Two byte value
           (ok { value: value12, next-offset: offset2 })
           
           ;; Read third byte
@@ -61,7 +60,6 @@
               (value123 (+ value12 (* data-bits3 (pow u2 u14))))
             )
             (if (not has-more3)
-              ;; Three byte value
               (ok { value: value123, next-offset: offset3 })
               
               ;; Read fourth byte
@@ -74,19 +72,172 @@
                   (value1234 (+ value123 (* data-bits4 (pow u2 u21))))
                 )
                 (if (not has-more4)
-                  ;; Four byte value
                   (ok { value: value1234, next-offset: offset4 })
                   
-                  ;; Read fifth byte (for large numbers)
+                  ;; Read fifth byte
                   (let (
                       (byte5-result (try! (read-byte data offset4)))
                       (byte5 (get byte byte5-result))
                       (offset5 (get next-offset byte5-result))
                       (data-bits5 (bit-and byte5 u127))
+                      (has-more5 (> (bit-and byte5 u128) u0))
                       (value12345 (+ value1234 (* data-bits5 (pow u2 u28))))
                     )
-                    ;; Five byte value
-                    (ok { value: value12345, next-offset: offset5 })
+                    (if (not has-more5)
+                      (ok { value: value12345, next-offset: offset5 })
+                      
+                      ;; Read sixth byte
+                      (let (
+                          (byte6-result (try! (read-byte data offset5)))
+                          (byte6 (get byte byte6-result))
+                          (offset6 (get next-offset byte6-result))
+                          (data-bits6 (bit-and byte6 u127))
+                          (has-more6 (> (bit-and byte6 u128) u0))
+                          (value123456 (+ value12345 (* data-bits6 (pow u2 u35))))
+                        )
+                        (if (not has-more6)
+                          (ok { value: value123456, next-offset: offset6 })
+                          
+                          ;; Read seventh byte
+                          (let (
+                              (byte7-result (try! (read-byte data offset6)))
+                              (byte7 (get byte byte7-result))
+                              (offset7 (get next-offset byte7-result))
+                              (data-bits7 (bit-and byte7 u127))
+                              (has-more7 (> (bit-and byte7 u128) u0))
+                              (value1234567 (+ value123456 (* data-bits7 (pow u2 u42))))
+                            )
+                            (if (not has-more7)
+                              (ok { value: value1234567, next-offset: offset7 })
+                              
+                              ;; Read eighth byte
+                              (let (
+                                  (byte8-result (try! (read-byte data offset7)))
+                                  (byte8 (get byte byte8-result))
+                                  (offset8 (get next-offset byte8-result))
+                                  (data-bits8 (bit-and byte8 u127))
+                                  (has-more8 (> (bit-and byte8 u128) u0))
+                                  (value12345678 (+ value1234567 (* data-bits8 (pow u2 u49))))
+                                )
+                                (if (not has-more8)
+                                  (ok { value: value12345678, next-offset: offset8 })
+                                
+                                  ;; Read ninth byte
+                                  (let (
+                                      (byte9-result (try! (read-byte data offset8)))
+                                      (byte9 (get byte byte9-result))
+                                      (offset9 (get next-offset byte9-result))
+                                      (data-bits9 (bit-and byte9 u127))
+                                      (has-more9 (> (bit-and byte9 u128) u0))
+                                      (value123456789 (+ value12345678 (* data-bits9 (pow u2 u56))))
+                                    )
+                                    (if (not has-more9)
+                                      (ok { value: value123456789, next-offset: offset9 })
+                                    
+                                      ;; Read tenth byte
+                                      (let (
+                                          (byte10-result (try! (read-byte data offset9)))
+                                          (byte10 (get byte byte10-result))
+                                          (offset10 (get next-offset byte10-result))
+                                          (data-bits10 (bit-and byte10 u127))
+                                          (has-more10 (> (bit-and byte10 u128) u0))
+                                          (value12345678910 (+ value123456789 (* data-bits10 (pow u2 u63))))
+                                        )
+                                        (if (not has-more10)
+                                          (ok { value: value12345678910, next-offset: offset10 })
+                                        
+                                          ;; Read eleventh byte
+                                          (let (
+                                              (byte11-result (try! (read-byte data offset10)))
+                                              (byte11 (get byte byte11-result))
+                                              (offset11 (get next-offset byte11-result))
+                                              (data-bits11 (bit-and byte11 u127))
+                                              (has-more11 (> (bit-and byte11 u128) u0))
+                                              (value1234567891011 (+ value12345678910 (* data-bits11 (pow u2 u70))))
+                                            )
+                                            (if (not has-more11)
+                                              (ok { value: value1234567891011, next-offset: offset11 })
+                                            
+                                              ;; Read twelfth byte
+                                              (let (
+                                                  (byte12-result (try! (read-byte data offset11)))
+                                                  (byte12 (get byte byte12-result))
+                                                  (offset12 (get next-offset byte12-result))
+                                                  (data-bits12 (bit-and byte12 u127))
+                                                  (has-more12 (> (bit-and byte12 u128) u0))
+                                                  (value123456789101112 (+ value1234567891011 (* data-bits12 (pow u2 u77))))
+                                                )
+                                                (if (not has-more12)
+                                                  (ok { value: value123456789101112, next-offset: offset12 })
+                                                
+                                                  ;; Read thirteenth byte
+                                                  (let (
+                                                      (byte13-result (try! (read-byte data offset12)))
+                                                      (byte13 (get byte byte13-result))
+                                                      (offset13 (get next-offset byte13-result))
+                                                      (data-bits13 (bit-and byte13 u127))
+                                                      (has-more13 (> (bit-and byte13 u128) u0))
+                                                      (value12345678910111213 (+ value123456789101112 (* data-bits13 (pow u2 u84))))
+                                                    )
+                                                    (if (not has-more13)
+                                                      (ok { value: value12345678910111213, next-offset: offset13 })
+                                                    
+                                                      ;; Read fourteenth byte
+                                                      (let (
+                                                          (byte14-result (try! (read-byte data offset13)))
+                                                          (byte14 (get byte byte14-result))
+                                                          (offset14 (get next-offset byte14-result))
+                                                          (data-bits14 (bit-and byte14 u127))
+                                                          (has-more14 (> (bit-and byte14 u128) u0))
+                                                          (value1234567891011121314 (+ value12345678910111213 (* data-bits14 (pow u2 u91))))
+                                                        )
+                                                        (if (not has-more14)
+                                                          (ok { value: value1234567891011121314, next-offset: offset14 })
+                                                        
+                                                          ;; Read fifteenth byte
+                                                          (let (
+                                                              (byte15-result (try! (read-byte data offset14)))
+                                                              (byte15 (get byte byte15-result))
+                                                              (offset15 (get next-offset byte15-result))
+                                                              (data-bits15 (bit-and byte15 u127))
+                                                              (has-more15 (> (bit-and byte15 u128) u0))
+                                                              (value123456789101112131415 (+ value1234567891011121314 (* data-bits15 (pow u2 u98))))
+                                                            )
+                                                            (if (not has-more15)
+                                                              (ok { value: value123456789101112131415, next-offset: offset15 })
+                                                            
+                                                              ;; Read sixteenth byte
+                                                              (let (
+                                                                  (byte16-result (try! (read-byte data offset15)))
+                                                                  (byte16 (get byte byte16-result))
+                                                                  (offset16 (get next-offset byte16-result))
+                                                                  (data-bits16 (bit-and byte16 u127))
+                                                                  (value12345678910111213141516 (+ value123456789101112131415 (* data-bits16 (pow u2 u105))))
+                                                                )
+                                                                ;; Sixteen byte value (max 128-bit unsigned integer)
+                                                                (ok { value: value12345678910111213141516, next-offset: offset16 })
+                                                              )
+                                                            )
+                                                          )
+                                                        )
+                                                      )
+                                                    )
+                                                  )
+                                                )
+                                              )
+                                            )
+                                          )
+                                        )
+                                      )
+                                    )
+                                  )
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
                   )
                 )
               )
