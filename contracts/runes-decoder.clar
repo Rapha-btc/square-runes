@@ -208,15 +208,8 @@
       (if (not (is-eq output expected-output))
         (err ERR-WRONG-OUTPUT)
         
-        ;; Return all relevant data
-        (ok {
-          protocol_param1: param1,
-          protocol_param2: param2,
-          rune_block: rune-block,
-          rune_tx: rune-tx,
-          amount: amount,
-          output: output
-        })
+        ;; Return the amount to match other functions' return types
+        (ok amount)
       )
     )
   )
@@ -395,12 +388,12 @@
         (if (is-eq tag u11)
           ;; Tag 11 (0x0b) specialized transfer
           ;; For Tag 11, expected_rune_block is treated as the Rune ID directly
-          (parse-tag11-transfer script next-offset expected-rune-block expected-output)
+          (parse-tag22-transfer script next-offset expected-rune-block expected-rune-tx expected-output)
           
           ;; Check if it's Tag 22
           (if (is-eq tag u22) ;; Decimal 22 (0x16)
             ;; Add Tag 22 parsing similar to Tag 11
-            (parse-tag22-transfer script next-offset expected-rune-block expected-output)       
+            (parse-tag22-transfer script next-offset expected-rune-block expected-rune-tx expected-output)
 
             ;; Unsupported tag
             (err ERR-UNSUPPORTED-TAG))
@@ -583,3 +576,56 @@
        (ok (unwrap! (slice? script start end) (err u1000)))
      )
    )
+
+   (define-read-only (parse-xverse-transfer-full (script (buff 1376)))
+  (if (not (is-runestone script))
+    (err ERR-NOT-A-RUNESTONE)
+    
+    (let (
+        (tag-result (try! (decode-leb128 script u2)))
+        (tag (get value tag-result))
+      )
+      (if (not (is-eq tag u22))
+        (err ERR-UNSUPPORTED-TAG)
+        
+        ;; For Xverse transactions, decode all parameters
+        (let (
+            (offset1 (get next-offset tag-result))
+            (param1-result (try! (decode-leb128 script offset1)))
+            (param1 (get value param1-result))
+            (offset2 (get next-offset param1-result))
+            
+            (param2-result (try! (decode-leb128 script offset2)))
+            (param2 (get value param2-result))
+            (offset3 (get next-offset param2-result))
+            
+            (rune-block-result (try! (decode-leb128 script offset3)))
+            (rune-block (get value rune-block-result))
+            (offset4 (get next-offset rune-block-result))
+            
+            (rune-tx-result (try! (decode-leb128 script offset4)))
+            (rune-tx (get value rune-tx-result))
+            (offset5 (get next-offset rune-tx-result))
+            
+            (amount-result (try! (decode-leb128 script offset5)))
+            (amount (get value amount-result))
+            
+            ;; Check output (last byte)
+            (output-offset (- (len script) u1))
+            (output-result (try! (decode-leb128 script output-offset)))
+            (output (get value output-result))
+          )
+          
+          (ok {
+            protocol_param1: param1,
+            protocol_param2: param2,
+            rune_block: rune-block,
+            rune_tx: rune-tx,
+            amount: amount,
+            output: output
+          })
+        )
+      )
+    )
+  )
+)
