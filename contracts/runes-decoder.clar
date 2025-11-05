@@ -23,6 +23,7 @@
 )
 
 ;; Decode a LEB128 integer
+;; Decode a LEB128 integer with support for 5 bytes (larger numbers)
 (define-read-only (decode-leb128 (data (buff 4096)) (start-offset uint))
   ;; Read first byte
   (let (
@@ -69,10 +70,25 @@
                   (byte4 (get byte byte4-result))
                   (offset4 (get next-offset byte4-result))
                   (data-bits4 (bit-and byte4 u127))
+                  (has-more4 (> (bit-and byte4 u128) u0))
                   (value1234 (+ value123 (* data-bits4 (pow u2 u21))))
                 )
-                ;; Four byte value
-                (ok { value: value1234, next-offset: offset4 })
+                (if (not has-more4)
+                  ;; Four byte value
+                  (ok { value: value1234, next-offset: offset4 })
+                  
+                  ;; Read fifth byte (for large numbers)
+                  (let (
+                      (byte5-result (try! (read-byte data offset4)))
+                      (byte5 (get byte byte5-result))
+                      (offset5 (get next-offset byte5-result))
+                      (data-bits5 (bit-and byte5 u127))
+                      (value12345 (+ value1234 (* data-bits5 (pow u2 u28))))
+                    )
+                    ;; Five byte value
+                    (ok { value: value12345, next-offset: offset5 })
+                  )
+                )
               )
             )
           )
