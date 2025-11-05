@@ -147,6 +147,176 @@
   )
 )
 
+(define-read-only (parse-tag22-transfer
+    (script (buff 1376))
+    (start-offset uint)
+    (expected-rune-block uint)
+    (expected-rune-tx uint)
+    (expected-output uint)
+  )
+  ;; Parse protocol params 1 and 2
+  (let (
+      (param1-result (try! (decode-leb128 script start-offset)))
+      (param1 (get value param1-result))
+      (offset1 (get next-offset param1-result))
+      
+      (param2-result (try! (decode-leb128 script offset1)))
+      (param2 (get value param2-result))
+      (offset2 (get next-offset param2-result))
+      
+      ;; Parse the Rune block and tx index
+      (block-result (try! (decode-leb128 script offset2)))
+      (rune-block (get value block-result))
+      (offset3 (get next-offset block-result))
+      
+      (tx-result (try! (decode-leb128 script offset3)))
+      (rune-tx (get value tx-result))
+      (offset4 (get next-offset tx-result))
+      
+      ;; Parse amount (param5)
+      (amount-result (try! (decode-leb128 script offset4)))
+      (amount (get value amount-result))
+      (offset5 (get next-offset amount-result))
+      
+      ;; Parse the output index (last byte)
+      (output-offset (- (len script) u1))
+      (output-result (try! (decode-leb128 script output-offset)))
+      (output (get value output-result))
+    )
+    
+    (print { 
+      msg: "Tag 22 transfer decoded", 
+      protocol_param1: param1, 
+      protocol_param2: param2, 
+      rune_block: rune-block, 
+      expected_block: expected-rune-block,
+      rune_tx: rune-tx,
+      expected_tx: expected-rune-tx,
+      amount: amount,
+      output: output,
+      expected_output: expected-output
+    })
+    
+    ;; Verify Rune block and tx match expected
+    (if (or 
+          (not (is-eq rune-block expected-rune-block))
+          (not (is-eq rune-tx expected-rune-tx))
+        )
+      (err ERR-WRONG-RUNE)
+      
+      ;; Verify output matches expected
+      (if (not (is-eq output expected-output))
+        (err ERR-WRONG-OUTPUT)
+        
+        ;; Return all relevant data
+        (ok {
+          protocol_param1: param1,
+          protocol_param2: param2,
+          rune_block: rune-block,
+          rune_tx: rune-tx,
+          amount: amount,
+          output: output
+        })
+      )
+    )
+  )
+)
+
+(define-read-only (parse-xverse-transfer (script (buff 1376)) (expected-output uint))
+  (if (not (is-runestone script))
+    (err ERR-NOT-A-RUNESTONE)
+    
+    (let (
+        (tag-result (try! (decode-leb128 script u2)))
+        (tag (get value tag-result))
+      )
+      (if (not (is-eq tag u22))
+        (err ERR-UNSUPPORTED-TAG)
+        
+        ;; For Xverse transactions, decode the structure
+        (let (
+            (offset1 (get next-offset tag-result))
+            (rune-block-result (try! (decode-leb128 script offset1)))
+            (rune-block (get value rune-block-result))
+            (offset2 (get next-offset rune-block-result))
+            
+            (rune-tx-result (try! (decode-leb128 script offset2)))
+            (rune-tx (get value rune-tx-result))
+            (offset3 (get next-offset rune-tx-result))
+            
+            ;; Parse parameters for amount calculation
+            (amount-p1-result (try! (decode-leb128 script offset3)))
+            (amount-p1 (get value amount-p1-result))
+            (offset4 (get next-offset amount-p1-result))
+            
+            ;; Use a combined formula based on the specific LEB128 encoding pattern
+            ;; This formula will need adjustment based on actual encoding
+            (amount (* amount-p1 u256))
+            
+            ;; Check output (last byte)
+            (output-offset (- (len script) u1))
+            (output-result (try! (decode-leb128 script output-offset)))
+            (output (get value output-result))
+          )
+          
+          (print {
+            msg: "Xverse transfer",
+            rune-block: rune-block,
+            rune-tx: rune-tx,
+            amount: amount,
+            output: output
+          })
+          
+          (if (not (is-eq output expected-output))
+            (err ERR-WRONG-OUTPUT)
+            (ok {
+              rune-block: rune-block,
+              rune-tx: rune-tx,
+              amount: amount,
+              output: output
+            })
+          )
+        )
+      )
+    )
+  )
+)
+
+(define-read-only (extract-tag22-amount (script (buff 1376)))
+  (if (not (is-runestone script))
+    (err ERR-NOT-A-RUNESTONE)
+    
+    (let (
+        (tag-result (try! (decode-leb128 script u2)))
+        (tag (get value tag-result))
+      )
+      (if (not (is-eq tag u22))
+        (err ERR-UNSUPPORTED-TAG)
+        
+        ;; For Xverse transactions (6a5d160200f7a538c60a80e8922601)
+        (let (
+            (offset1 (get next-offset tag-result))
+            (param1-result (try! (decode-leb128 script offset1)))
+            (offset2 (get next-offset param1-result))
+            (param2-result (try! (decode-leb128 script offset2)))
+            (offset3 (get next-offset param2-result))
+            (param3-result (try! (decode-leb128 script offset3)))
+            (offset4 (get next-offset param3-result))
+          )
+          ;; Try to parse the amount parameter
+          (if (>= (len script) offset4)
+            (match (decode-leb128 script offset4)
+              success (ok (get value success))
+              error (err u1005) ;; Error reading amount
+            )
+            (err u1006) ;; Not enough data for amount
+          )
+        )
+      )
+    )
+  )
+)
+
 ;; Parse a Runes transfer from scriptPubKey - supports both Tag 0 and Tag 11 (0x0b)
 (define-read-only (parse-runes-transfer 
     (script (buff 1376))
@@ -227,8 +397,13 @@
           ;; For Tag 11, expected_rune_block is treated as the Rune ID directly
           (parse-tag11-transfer script next-offset expected-rune-block expected-output)
           
-          ;; Unsupported tag
-          (err ERR-UNSUPPORTED-TAG)
+          ;; Check if it's Tag 22
+          (if (is-eq tag u22) ;; Decimal 22 (0x16)
+            ;; Add Tag 22 parsing similar to Tag 11
+            (parse-tag22-transfer script next-offset expected-rune-block expected-output)       
+
+            ;; Unsupported tag
+            (err ERR-UNSUPPORTED-TAG))
         )
       )
     )
@@ -378,3 +553,33 @@
     )
   )
 )
+
+(define-read-only (decode-amount-from-tag22 (script (buff 1376)))
+     ;; Skip tag and first 4 parameters to get to where the amount should be
+     (let (
+         (tag-result (try! (decode-leb128 script u2)))
+         (offset1 (get next-offset tag-result))
+         (param1-result (try! (decode-leb128 script offset1)))
+         (offset2 (get next-offset param1-result))
+         (param2-result (try! (decode-leb128 script offset2)))
+         (offset3 (get next-offset param2-result))
+         (param3-result (try! (decode-leb128 script offset3)))
+         (offset4 (get next-offset param3-result))
+         (param4-result (try! (decode-leb128 script offset4)))
+         (offset5 (get next-offset param4-result))
+       )
+       ;; Try to decode remaining bytes as amount
+       (if (>= (len script) offset5)
+         (match (decode-leb128 script offset5)
+           success (ok (get value success))
+           error (err u1005))
+         (err u1006))
+     )
+   )
+
+   (define-read-only (extract-raw-bytes (script (buff 1376)) (start uint) (end uint))
+     (if (or (>= start (len script)) (> end (len script)) (> start end))
+       (err u1000)
+       (ok (unwrap! (slice? script start end) (err u1000)))
+     )
+   )
