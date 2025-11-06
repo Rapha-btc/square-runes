@@ -20,7 +20,7 @@
 1. **Release Without Burning**: Operator and user could collude to release L1 Runes without burning wrapped tokens (no honey pot for bridge operator thou + reputational risk loss of business)
 2. **Operator Availability**: Two-way bridge requires operator's active participation for withdrawals
 3. **Technical Verification**: Clarity can create a trustless map between multi-sig (runes receiver) and tx-sender's pubkey signer
-4. **Risk bridge private keys**: if hacked, users can access their runes on l1 without the need to burn on l2
+4. **Risk bridge private keys**: if hacked, users can access their runes on l1 without the need to burn on l2 - maybe have 2 sets of private keys... 3 of 3 multi sig
 
 ## Mitigations
 
