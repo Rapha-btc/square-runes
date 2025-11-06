@@ -10,10 +10,15 @@ path = 'contracts/leb128-decoder.clar'
 clarity_version = 3
 epoch = '3.2'
 
+[contracts.multisig-verify]
+path = 'contracts/multisig-verify.clar'
+clarity_version = 3
+epoch = 'latest'
+
 [contracts.runes-decoder]
 path = 'contracts/runes-decoder.clar'
 clarity_version = 3
-epoch = 'latest'
+epoch = '3.2'
 [repl.analysis]
 passes = ['check_checker']
 
