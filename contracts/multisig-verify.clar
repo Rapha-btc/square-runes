@@ -187,7 +187,7 @@
       ;; Get the pubkey hash directly from tx-sender (user's Stacks address)
       (user-pubkey-hash (get hash-bytes (unwrap-panic (principal-destruct? tx-sender))))
     )
-    (if 
+    (if found
         true  ;; Already found a match, short-circuit
         (is-eq (hash160 pubkey) user-pubkey-hash)  ;; Check current pubkey
     )
