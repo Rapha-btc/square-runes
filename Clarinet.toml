@@ -7,6 +7,21 @@ cache_dir = './.cache'
 
 [[project.requirements]]
 contract_id = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-bootstrap-signers'
+[contracts.add-converter]
+path = 'contracts/add-converter.clar'
+clarity_version = 3
+epoch = '3.2'
+
+[contracts.base58-decode]
+path = 'contracts/base58-decode.clar'
+clarity_version = 3
+epoch = '3.2'
+
+[contracts.base58-v3]
+path = 'contracts/base58-v3.clar'
+clarity_version = 3
+epoch = '3.2'
+
 [contracts.leb128-decoder]
 path = 'contracts/leb128-decoder.clar'
 clarity_version = 3
@@ -21,6 +36,11 @@ epoch = '3.2'
 path = 'contracts/runes-decoder.clar'
 clarity_version = 3
 epoch = '3.2'
+
+[contracts.test-converter]
+path = 'contracts/test-converter.clar'
+clarity_version = 3
+epoch = 'latest'
 [repl.analysis]
 passes = ['check_checker']
 

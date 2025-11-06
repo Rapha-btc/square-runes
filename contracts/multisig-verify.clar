@@ -132,3 +132,65 @@
     (sha256 (contract-call? 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-bootstrap-signers pubkeys-to-spend-script pubkeys m))
   ))
 )
+
+
+;; (define-read-only (btc-to-stx (input (string-ascii 60)))
+;;   (let (
+;;     ;; Decode base58 string to numbers
+;;     (b58-numbers (map unwrap-uint (filter is-some-uint (map b58-to-uint input))))
+;;     ;; Validate all characters are valid base58
+;;     (t1 (asserts! (>= (len b58-numbers) (len input)) ERR_INVALID_CHAR))
+;;     ;; Count leading '1's (zeros in base58)
+;;     (leading-ones-count (default-to (len input) (index-of? (map is-zero b58-numbers) false)))
+;;     ;; Convert to bytes
+;;     (decoded (concat (fold decode-outer to-decode LST) leading-zeros))
+;;     (decoded-hex (fold to-hex-rev decoded 0x))
+;;     ;; Verify checksum
+;;     (actual-checksum (unwrap-panic (slice? (sha256 (sha256 (unwrap-panic (slice? decoded-hex u0 (- decoded-hex-len u4))))) u0 u4)))
+;;     (expected-checksum (unwrap-panic (slice? decoded-hex (- decoded-hex-len u4) decoded-hex-len)))
+;;     (t3 (asserts! (is-eq actual-checksum expected-checksum) ERR_BAD_CHECKSUM))
+;;     ;; Extract version and construct principal
+;;     (version (unwrap-panic (element-at? STX_VER (unwrap! (index-of? BTC_VER (unwrap-panic (element-at? decoded-hex u0))) ERR_INVALID_VERSION))))
+;;     )
+;;     (principal-construct? version (unwrap-panic (as-max-len? (unwrap-panic (slice? decoded-hex u1 (- decoded-hex-len u4))) u20)))
+;;   )
+;; )
+
+
+(define-public (verify-user-in-multisig
+    (multisig-script-pub-key (buff 34))
+    (pubkeys (list 128 (buff 33)))
+    (m uint)
+  )
+  (let (
+      ;; Get the pubkey hash directly from tx-sender (user's Stacks address)
+      (user-pubkey-hash (get hash-bytes (unwrap-panic (principal-destruct? tx-sender))))
+      
+      ;; Check if any pubkey in the multisig list hashes to the user's pubkey hash
+      (user-is-signer (fold check-pubkey pubkeys false))
+      
+      ;; Verify the multisig itself is valid
+      (multisig-valid (unwrap-panic (verify-multisig-address pubkeys m true (some multisig-script-pub-key))))
+    )
+    ;; Only return true if both conditions are met
+    (ok (and user-is-signer multisig-valid))
+  )
+)
+
+;; Closure function that checks if the user's pubkey hash matches any pubkey in the list
+(define-private (check-pubkey 
+    (pubkey (buff 33)) 
+    (found bool)
+  )
+  (let
+    (
+      ;; Get the pubkey hash directly from tx-sender (user's Stacks address)
+      (user-pubkey-hash (get hash-bytes (unwrap-panic (principal-destruct? tx-sender))))
+    )
+    (if 
+        true  ;; Already found a match, short-circuit
+        (is-eq (hash160 pubkey) user-pubkey-hash)  ;; Check current pubkey
+    )
+  )
+)
+
