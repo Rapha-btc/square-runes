@@ -9,7 +9,7 @@
 
 ## Implementation
 
-1. User and operator create 2-of-2 multisig address
+1. User and operator create 2-of-3 multisig address
 2. User deposits Runes to multisig
 3. Bridge verifies deposit using Clarity Bitcoin library
 4. Bridge mints wrapped Runes on Stacks (Clarity oracle + map multisig/tx-sender receiver)
