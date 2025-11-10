@@ -164,7 +164,8 @@
   )
   (let (
       ;; Get the pubkey hash directly from tx-sender (user's Stacks address)
-      (user-pubkey-hash (get hash-bytes (unwrap-panic (principal-destruct? tx-sender))))
+      ;; (user-pubkey-hash (get hash-bytes (unwrap-panic (principal-destruct? tx-sender))))
+      ;; perhaps use a helper var instead of defining it in checkpubkey
       
       ;; Check if any pubkey in the multisig list hashes to the user's pubkey hash
       (user-is-signer (fold check-pubkey pubkeys false))

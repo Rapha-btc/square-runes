@@ -17,10 +17,10 @@ echo "Public Key 2: $pubkey2"
 Public Key 1: 038b39a74e2deaf00d4a6abb18acbd7a48ac2d1ba488f9049af96e96f6c61fcdfe
 Public Key 2: 02378b24c483280bf64c4913e8cbf6a6e0b45ddaaa95e5864d88741226e8421ead
 
-multisig_info=$(bitcoin-cli -rpcwallet=test_wallet createmultisig 2 "[\"038b39a74e2deaf00d4a6abb18acbd7a48ac2d1ba488f9049af96e96f6c61fcdfe\",\"02378b24c483280bf64c4913e8cbf6a6e0b45ddaaa95e5864d88741226e8421ead\"]" "bech32")
+multisig*info=$(bitcoin-cli -rpcwallet=test_wallet createmultisig 2 "[\"038b39a74e2deaf00d4a6abb18acbd7a48ac2d1ba488f9049af96e96f6c61fcdfe\",\"02378b24c483280bf64c4913e8cbf6a6e0b45ddaaa95e5864d88741226e8421ead\"]" "bech32")
 echo "Multisig Info: $multisig_info"
-echo "Multisig Address: $(echo $multisig_info | grep -o '"address": "[^"]_"' | cut -d'"' -f4)"
-echo "ScriptPubKey: $(echo $multisig_info | grep -o '"redeemScript": "[^"]_"' | cut -d'"' -f4)"
+echo "Multisig Address: $(echo $multisig_info | grep -o '"address": "[^"]*"' | cut -d'"' -f4)"
+echo "ScriptPubKey: $(echo $multisig*info | grep -o '"redeemScript": "[^"]*"' | cut -d'"' -f4)"
 
 Public Key 2: 02378b24c483280bf64c4913e8cbf6a6e0b45ddaaa95e5864d88741226e8421ead
 raphastacks@raphastacks-System-Product-Name:~$ multisig_info=$(bitcoin-cli -rpcwallet=test_wallet createmultisig 2 "[\"038b39a74e2deaf00d4a6abb18acbd7a48ac2d1ba488f9049af96e96f6c61fcdfe\",\"02378b24c483280bf64c4913e8cbf6a6e0b45ddaaa95e5864d88741226e8421ead\"]" "bech32")
@@ -192,7 +192,7 @@ Once in the Clarinet console, run:
     0x02378b24c483280bf64c4913e8cbf6a6e0b45ddaaa95e5864d88741226e8421ead
   )
   u2  ;; 2-of-2 multisig
-  true  ;; Is SegWit (P2WSH)
+  true
   (some 0x0020eddadf5b9c9c859a4dd18d6874c986b573a9d194bc954660c86b9618d4acd5da)  ;; The actual scriptPubKey
 )
 ```

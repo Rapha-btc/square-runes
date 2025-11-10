@@ -9,7 +9,7 @@
 
 ## Implementation
 
-1. User and operator create 2-of-2 multisig address
+1. User and operator create 2-of-2 multisig address (mapping in clarity trustless) -> 3 of 4 with user mandatory = user + 2/3 operators => the l1 is burnt => idea: after a while, if operator is dead, user can still go back => runes l2 in AMMs
 2. User deposits Runes to multisig
 3. Bridge verifies deposit using Clarity Bitcoin library
 4. Bridge mints wrapped Runes on Stacks (Clarity oracle + map multisig/tx-sender receiver)

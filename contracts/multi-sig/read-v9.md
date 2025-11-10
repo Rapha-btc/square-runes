@@ -10,6 +10,7 @@ You're absolutely right - I misunderstood. Let me clarify the exact flow for wha
    - The multisig scriptPubKey matches
 4. **Contract extracts pubkey hash** from user's Stacks principal (tx-sender)
 5. **Contract verifies** that the hash160 of one of the multisig pubkeys matches this pubkey hash
+
 6. **If verified**, contract records mapping: `multisig_address → stacks_principal`
 
 This creates a trustless, verified mapping where:
