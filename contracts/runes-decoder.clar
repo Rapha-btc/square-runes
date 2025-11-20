@@ -618,24 +618,42 @@
         (tag (get value tag-result))
         (next-offset1 (get next-offset tag-result))
         
-        ;; Parse first parameter (rune ID or block delta)
+        ;; Parse first parameter
         (param1-result (try! (decode-leb128 script next-offset1)))
         (param1 (get value param1-result))
         (next-offset2 (get next-offset param1-result))
         
-        ;; Parse second parameter (tx index or amount)
+        ;; Parse second parameter
         (param2-result (try! (decode-leb128 script next-offset2)))
         (param2 (get value param2-result))
         (next-offset3 (get next-offset param2-result))
         
-        ;; Parse third parameter (amount or output)
+        ;; Parse third parameter
         (param3-result (try! (decode-leb128 script next-offset3)))
         (param3 (get value param3-result))
         (next-offset4 (get next-offset param3-result))
         
         ;; Try to parse fourth parameter if it exists
-        (param4 (if (>= (len script) next-offset4)
+        (param4-maybe (if (>= (len script) next-offset4)
                    (match (decode-leb128 script next-offset4)
+                     success (some { value: (get value success), offset: (get next-offset success) })
+                     error none)
+                   none))
+        (param4 (match param4-maybe some-val (some (get value some-val)) none))
+        (next-offset5 (match param4-maybe some-val (get offset some-val) next-offset4))
+        
+        ;; Try to parse fifth parameter if it exists
+        (param5-maybe (if (>= (len script) next-offset5)
+                   (match (decode-leb128 script next-offset5)
+                     success (some { value: (get value success), offset: (get next-offset success) })
+                     error none)
+                   none))
+        (param5 (match param5-maybe some-val (some (get value some-val)) none))
+        (next-offset6 (match param5-maybe some-val (get offset some-val) next-offset5))
+        
+        ;; Try to parse sixth parameter if it exists
+        (param6 (if (>= (len script) next-offset6)
+                   (match (decode-leb128 script next-offset6)
                      success (some (get value success))
                      error none)
                    none))
@@ -643,10 +661,12 @@
       
       (ok {
         tag: tag,
-        param1: param1,
-        param2: param2,
-        param3: param3,
-        param4: param4
+        pointer-output: (if (is-eq tag u22) (some param1) none),
+        edict-tag: (if (is-eq tag u22) (some param2) none),
+        rune-block: (if (is-eq tag u22) param3 param1),
+        rune-tx: (if (is-eq tag u22) (default-to u0 param4) param2),
+        amount: (if (is-eq tag u22) (default-to u0 param5) param3),
+        edict-output: (if (is-eq tag u22) param6 param4)
       })
     )
   )
