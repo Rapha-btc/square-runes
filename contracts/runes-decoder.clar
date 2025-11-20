@@ -252,7 +252,7 @@
 ;; Check if a buffer starts with OP_RETURN (0x6a) + OP_13 (0x5d)
 (define-read-only (is-runestone (script (buff 1376)))
   (and
-    (>= (len script) u2)
+    (>= (len script) u3)
     (is-eq (unwrap! (element-at script u0) false) 0x6a)
     (is-eq (unwrap! (element-at script u1) false) 0x5d)
   )
@@ -387,7 +387,7 @@
     (err ERR-NOT-A-RUNESTONE)
     
     (let (
-        (tag-result (try! (decode-leb128 script u2)))
+        (tag-result (try! (decode-leb128 script u3)))
         (tag (get value tag-result))
       )
       (if (not (is-eq tag u22))
@@ -447,7 +447,7 @@
     (err ERR-NOT-A-RUNESTONE)
     
     (let (
-        (tag-result (try! (decode-leb128 script u2)))
+        (tag-result (try! (decode-leb128 script u3)))
         (tag (get value tag-result))
       )
       (if (not (is-eq tag u22))
@@ -490,7 +490,7 @@
     
     ;; Parse the tag
     (let (
-        (tag-result (try! (decode-leb128 script u2)))
+        (tag-result (try! (decode-leb128 script u3)))
         (tag (get value tag-result))
         (next-offset (get next-offset tag-result))
       )
@@ -576,7 +576,7 @@
     (err ERR-NOT-A-RUNESTONE)
     
     (let (
-        (tag-result (try! (decode-leb128 script u2)))
+        (tag-result (try! (decode-leb128 script u3)))
         (tag (get value tag-result))
       )
       (if (not (is-eq tag u11))
@@ -614,7 +614,7 @@
     
     (let (
         ;; Parse tag
-        (tag-result (try! (decode-leb128 script u2)))
+        (tag-result (try! (decode-leb128 script u3)))
         (tag (get value tag-result))
         (next-offset1 (get next-offset tag-result))
         
@@ -657,7 +657,7 @@
   (if (not (is-runestone script))
     (err ERR-NOT-A-RUNESTONE)
     
-    (match (decode-leb128 script u2)
+    (match (decode-leb128 script u3)
       success (ok (get value success))
       error (err error)
     )
@@ -671,7 +671,7 @@
     (err ERR-NOT-A-RUNESTONE)
     
     (let (
-        (tag-result (try! (decode-leb128 script u2)))
+        (tag-result (try! (decode-leb128 script u3)))
         (tag (get value tag-result))
       )
       (if (not (is-eq tag u11))
@@ -717,7 +717,7 @@
 (define-read-only (decode-amount-from-tag22 (script (buff 1376)))
      ;; Skip tag and first 4 parameters to get to where the amount should be
      (let (
-         (tag-result (try! (decode-leb128 script u2)))
+         (tag-result (try! (decode-leb128 script u3)))
          (offset1 (get next-offset tag-result))
          (param1-result (try! (decode-leb128 script offset1)))
          (offset2 (get next-offset param1-result))
@@ -749,7 +749,7 @@
     (err ERR-NOT-A-RUNESTONE)
     
     (let (
-        (tag-result (try! (decode-leb128 script u2)))
+        (tag-result (try! (decode-leb128 script u3)))
         (tag (get value tag-result))
       )
       (if (not (is-eq tag u22))
