@@ -173,3 +173,33 @@
     output-2: (get-output-segwit tx-buff u2),
   }
 )
+
+;; TEST ONLY: Parse without mining proof verification
+(define-public (test-log-opreturn
+    (wtx {
+      version: (buff 4),
+      ins: (list 50 { outpoint: { hash: (buff 32), index: (buff 4) }, scriptSig: (buff 1376), sequence: (buff 4) }),
+      outs: (list 50 { value: (buff 8), scriptPubKey: (buff 1376) }),
+      locktime: (buff 4),
+    })
+    (witness-data (buff 1650))
+  )
+  (let (
+      (tx-buff (contract-call?
+        'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.bitcoin-helper-wtx-v2
+        concat-wtx wtx witness-data
+      ))
+      (opreturn-data (get-opreturn-payload tx-buff))
+      (multisig-output (find-multisig-output tx-buff))
+    )
+    (print {
+      type: "test-log-opreturn",
+      opreturn: opreturn-data,
+      multisig-output: multisig-output,
+    })
+    (ok {
+      opreturn: opreturn-data,
+      multisig-output: multisig-output,
+    })
+  )
+)
