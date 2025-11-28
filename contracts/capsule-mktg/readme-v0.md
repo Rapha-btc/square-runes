@@ -1,14 +1,10 @@
 **Thread 1 - Capsule Trust Model:**
 
 1/ How do you trust a bridge operator? You don't. You make cheating impossible and defection unprofitable.
-
-2/ Capsule uses mandatory user signatures. I'm the oracle attesting to L2 burns, but I literally cannot move your BTC without your signature. Cheating you is not hard - it's impossible.
-
-3/ Transparency is the enforcement. I'm a known operator. Every attestation I sign can be verified against on-chain burns. One dishonest attestation = publicly provable = business over.
-
-4/ No honeypot. Funds are distributed across individual capsules. Bribing me for one user's funds destroys my entire operation. The math doesn't work.
-
-5/ This isn't trustless - it's trust-minimized with aligned incentives. You verify, you sign, you control. I just attest to what's already on-chain.
+2/ Capsule uses mandatory user signatures. The operator attests to L2 burns, but cannot move BTC without the user's signature. Cheating isn't hard - it's impossible.
+3/ Transparency is the enforcement. The operator is known. Every attestation can be verified against on-chain burns. One dishonest attestation = publicly provable = business over.
+4/ No honeypot. Funds are distributed across individual capsules. Bribing an operator for one user's funds destroys their entire operation. The math doesn't work.
+5/ This isn't trustless - it's trust-minimized with aligned incentives. Users verify, users sign, users control. The operator just attests to what's already on-chain.
 
 ---
 
