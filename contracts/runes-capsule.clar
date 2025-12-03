@@ -23,8 +23,6 @@
 (define-constant ERR-MULTISIG-VERIFICATION-FAILED (err u411))
 (define-constant ERR-MULTISIG-MISMATCH (err u412)) 
 (define-constant ERR-PUBKEY-MISMATCH (err u413))
-(define-constant ERR-MULTISIG-MISMATCH (err u414))
-
 
 ;; ============================================
 ;; CONSTANTS
@@ -62,20 +60,20 @@
 ;; Key: scriptPubKey (buff 34) TO Value: { owner: principal, registered-at: uint }
 (define-map capsule-owners
   (buff 34)
-  { owner: principal, user-pubkey: (buff 33), registered-at: uint }
+  { owner: principal, registered-at: uint }
 )
 
 ;; Tracks processed deposits to prevent double-minting
 ;; Key: btc-tx-id (buff 32) TO Value: deposit details
-(define-map processed-btc-deposits
+(define-map processed-btc-txs
   (buff 128)
   { 
+    amount: uint,
     capsule-script-pubkey: principal,
     rune-block: uint,
     rune-tx: uint,
-    amount: uint,
-    stacks-block: uint,
-    btc-height: uint
+    btc-height: uint,
+    tx-number: uint
   }
 )
 
@@ -134,6 +132,7 @@
     (stx-receiver principal)
     (user-pubkey (buff 33)) 
     (capsule-script (buff 34))
+    (is-segwit bool)
   )
   (begin 
       (asserts! (is-eq (principal-of? user-pubkey) (ok stx-receiver)) ERR-PUBKEY-MISMATCH)
@@ -147,17 +146,17 @@
                 verify-multisig-address
                 pubkeys
                 MULTISIG_THRESHOLD
-                true  ;; is-segwit
+                is-segwit
                 (some capsule-script)
-            ) ERR-MULTISIG-VERIFICATION-FAILED))
+            ) ERR-MULTISIG-VERIFICATION-FAILED)))
 
             (asserts! verification ERR-MULTISIG-MISMATCH)
             ;; Map the capsule scriptPubKey to tx-sender
             (ok (map-set capsule-owners 
             capsule-script
-            { owner: stx-receiver, user-pubkey: user-pubkey, registered-at: block-height }
+            { owner: stx-receiver, registered-at: burn-block-height } ;; pubkey is not persisted
             ))
-  ))
+  )
 ))
 
 ;; ============================================
@@ -172,12 +171,12 @@
   (map-get? supported-runes { block: rune-block, tx: rune-tx })
 )
 
-(define-read-only (is-deposit-processed (btc-tx-id (buff 32)))
-  (is-some (map-get? processed-deposits btc-tx-id))
+(define-read-only (is-deposit-processed (btc-tx-id (buff 128)))
+  (is-some (map-get? processed-btc-txs btc-tx-id))
 )
 
-(define-read-only (get-deposit-info (btc-tx-id (buff 32)))
-  (map-get? processed-deposits btc-tx-id)
+(define-read-only (get-deposit-info (btc-tx-id (buff 128)))
+  (map-get? processed-btc-txs btc-tx-id)
 )
 
 ;; ============================================
@@ -218,29 +217,32 @@
       wproof witness-merkle-root witness-reserved-value ctx cproof
     )
       btc-tx-id (process-verified-deposit btc-tx-id tx-buff height mom-token)
-      error ERR-TX-NOT-MINED
+      error (err (* error u1000)) ;; ERR-TX-NOT-MINED
     )
   )
 )
 
 ;; Process deposit after BTC tx is verified as mined
 (define-private (process-verified-deposit 
-    (btc-tx-id (buff 32))
+    (btc-tx-id (buff 128))
     (tx-buff (buff 4096))
     (btc-height uint)
     (mom-token <sr-trait>)
   )
   (begin
     ;; Check not already processed
-    (asserts! (not (is-deposit-processed btc-tx-id)) ERR-DEPOSIT-ALREADY-PROCESSED)
+    (asserts! (is-none (map-get? processed-btc-txs btc-tx-id)) ERR-DEPOSIT-ALREADY-PROCESSED)
     
     ;; Parse the OP_RETURN to get Rune info
     (let (
         (parsed (unwrap! (parse-deposit-opreturn tx-buff) ERR-PARSE-FAILED))
+        (amount (get amount parsed))
+        ;; (edict-output (get edict-output parsed))
+        ;; (edict-tag (get edict-tag parsed))
+        ;; (pointer-output (get pointer-output parsed))
         (rune-block (get rune-block parsed))
         (rune-tx (get rune-tx parsed))
-        (amount (get amount parsed))
-        (output-index (get output parsed))
+        (tag (get tag parsed))
       )
       
       ;; Verify this is MOM's or another supported Rune
@@ -307,21 +309,11 @@
 ;; Parse OP_RETURN from tx buffer using the runes-decoder library
 (define-read-only (parse-deposit-opreturn (tx-buff (buff 4096)))
   (let (
-      ;; Get output 0 which should be the OP_RETURN
       (output0 (unwrap! (get-output-at-index tx-buff u0) (err u500)))
       (script (get scriptPubKey output0))
     )
-    ;; Use runes-decoder to parse - adjust contract address as needed
-    ;; This calls parse-xverse-transfer-full which handles Tag 22 (your test case)
-    (match (contract-call? .runes-decoder parse-xverse-transfer-full script)
-      parsed-result (ok {
-        rune-block: (get rune_block parsed-result),
-        rune-tx: (get rune_tx parsed-result),
-        amount: (get amount parsed-result),
-        output: (get output parsed-result)
-      })
-      error (err u501)
-    )
+    ;; decode-any-runestone is more generic - handles Tag 0, 11, 22
+    (contract-call? .runes-decoder decode-any-runestone script)
   )
 )
 
