@@ -1,111 +1,191 @@
-;; log-opreturn.clar
-;; Minimal contract to log OP_RETURN and verify multisig output from Bitcoin PSBT
-;; Multisig: bc1qxgs852k3ee87h33ycw3qdr8zdsrqy3td83qqja8f3986llt66z2qcnk2zp
-
-(define-constant ERR-ELEMENT-EXPECTED (err u129))
-(define-constant ERR-TRANSACTION (err u131))
-(define-constant ERR-MULTISIG-NOT-FOUND (err u132))
-
-;; Multisig scriptPubKey from tx output 1 (P2WSH format: 0x0020 + 32-byte witness program)
-;; TODO: Verify this matches bc1qxgs852k3ee87h33ycw3qdr8zdsrqy3td83qqja8f3986llt66z2qcnk2zp
-(define-constant MULTISIG_SCRIPTPUBKEY 0x002032207a2ad1ce4febc624c3a2068ce26c0602456d3c400974e9894faffd7ad094)
-
-;; Expected value: 546 sats (dust limit for Runes)
-(define-constant EXPECTED_SATS u546)
+;; runes-capsule-core.clar
+;; Trustless bridge for Runes deposits TO SIP-10 minting ~ Square Runes tokens
+;; Verifies BTC deposits to multisig capsules and mints wrapped tokens
 
 ;; ============================================
-;; Helper: read uint64 little-endian from buffer
+;; TRAITS
 ;; ============================================
-(define-read-only (read-uint64-le (value-buff (buff 8)))
-  (buff-to-uint-le value-buff)
+;; create a square runes trait with burn and mint functions
+(use-trait sr-trait 'SP3XXMS38VTAWTVPE5682XSBFXPTH7XCPEBTX8AN2.faktory-trait-v1.sip-010-trait)
+;; ============================================
+;; ERROR CODES
+;; ============================================
+(define-constant ERR-NOT-AUTHORIZED (err u401))
+(define-constant ERR-CAPSULE-NOT-FOUND (err u402))
+(define-constant ERR-DEPOSIT-ALREADY-PROCESSED (err u403))
+(define-constant ERR-RUNE-NOT-SUPPORTED (err u404))
+(define-constant ERR-MULTISIG-NOT-FOUND (err u405))
+(define-constant ERR-INVALID-AMOUNT (err u406))
+(define-constant ERR-MINT-FAILED (err u407))
+(define-constant ERR-PARSE-FAILED (err u408))
+(define-constant ERR-WRONG-OUTPUT (err u409))
+(define-constant ERR-TX-NOT-MINED (err u410))
+(define-constant ERR-MULTISIG-VERIFICATION-FAILED (err u411))
+(define-constant ERR-MULTISIG-MISMATCH (err u412)) 
+(define-constant ERR-PUBKEY-MISMATCH (err u413))
+(define-constant ERR-MULTISIG-MISMATCH (err u414))
+
+
+;; ============================================
+;; CONSTANTS
+;; ============================================
+;; set of multiple operators decentralized for liveness and redundancy
+(define-constant OPERATOR_PUBKEY 0x024289ad7d50c0be883566d38249d0d644ed0626ce52ea0e1e4a9bdafe6293bc21)
+
+;; Multisig threshold (2-of-2)
+(define-constant MULTISIG_THRESHOLD u2)
+
+;; Expected output index for capsule deposits (output 1 = multisig)
+(define-constant EXPECTED_MULTISIG_OUTPUT u1)
+
+;; Contract deployer
+(define-constant CONTRACT_DEPLOYER tx-sender)
+
+;; ============================================
+;; DATA VARS
+;; ============================================
+(define-data-var contract-owner principal tx-sender)
+(define-data-var mom-token-contract principal .square-mom) ;; Set after MOM token deployment
+
+;; ============================================
+;; DATA MAPS
+;; ============================================
+
+;; Maps supported Runes to their SIP-10 token contracts
+;; Key: { block: uint, tx: uint } TO Value: token contract principal
+(define-map supported-runes 
+  { block: uint, tx: uint }
+  { token-contract: principal, decimals: uint, name: (string-ascii 32) }
+)
+
+;; Maps capsule scriptPubKey to owner's Stacks address
+;; Key: scriptPubKey (buff 34) TO Value: { owner: principal, registered-at: uint }
+(define-map capsule-owners
+  (buff 34)
+  { owner: principal, user-pubkey: (buff 33), registered-at: uint }
+)
+
+;; Tracks processed deposits to prevent double-minting
+;; Key: btc-tx-id (buff 32) TO Value: deposit details
+(define-map processed-btc-deposits
+  (buff 128)
+  { 
+    capsule-script-pubkey: principal,
+    rune-block: uint,
+    rune-tx: uint,
+    amount: uint,
+    stacks-block: uint,
+    btc-height: uint
+  }
 )
 
 ;; ============================================
-;; Get output at index from parsed segwit tx
+;; INITIALIZATION
 ;; ============================================
-(define-read-only (get-output-segwit (tx (buff 4096)) (index uint))
-  (let ((parsed-tx (contract-call?
-      'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.clarity-bitcoin-lib-v7
-      parse-wtx tx false
-    )))
-    (match parsed-tx
-      result (let (
-          (outs (get outs (unwrap-panic parsed-tx)))
-          (out (unwrap! (element-at? outs index) ERR-TRANSACTION))
-        )
-        (ok {
-          scriptPubKey: (get scriptPubKey out),
-          value: (get value out)
-        })
-      )
-      missing ERR-TRANSACTION
-    )
+(begin
+  ;; Register MOM's as first supported Rune
+  (map-set supported-runes 
+    { block: u922359, tx: u1350 }
+    { 
+      token-contract: .square-mom, 
+      decimals: u0,
+      name: "MOM"
+    }
   )
 )
 
 ;; ============================================
-;; Extract raw OP_RETURN payload from output 0
+;; ADMIN FUNCTIONS
 ;; ============================================
-(define-read-only (get-opreturn-payload (tx (buff 4096)))
-  (match (get-output-segwit tx u0)
-    result (let (
-        (script (get scriptPubKey result))
-        (script-len (len script))
-        ;; OP_RETURN: 6a <len> <data> or 6a 4c <len> <data>
-        (offset (if (is-eq (unwrap! (element-at? script u1) ERR-ELEMENT-EXPECTED) 0x4c)
-          u3
-          u2
-        ))
-        (payload (unwrap! (slice? script offset script-len) ERR-ELEMENT-EXPECTED))
-      )
-      (ok {
-        full-script: script,
-        payload: payload,
-        payload-len: (len payload)
-      })
-    )
-    error ERR-ELEMENT-EXPECTED
+
+;; no admins, use code-body instead
+(define-public (set-contract-owner (new-owner principal))
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-AUTHORIZED)
+    (ok (var-set contract-owner new-owner))
+  )
+)
+
+;; use code-body instead?
+(define-public (add-supported-rune 
+    (rune-block uint) 
+    (rune-tx uint) 
+    (token-contract principal)
+    (decimals uint)
+    (name (string-ascii 32))
+  )
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-AUTHORIZED)
+    (ok (map-set supported-runes 
+      { block: rune-block, tx: rune-tx }
+      { token-contract: token-contract, decimals: decimals, name: name }
+    ))
   )
 )
 
 ;; ============================================
-;; Find multisig output (searches outputs 1-4)
+;; CAPSULE REGISTRATION
 ;; ============================================
-(define-read-only (find-multisig-output (tx (buff 4096)))
-  (let (
-      (out1 (get-output-segwit tx u1))
-      (out2 (get-output-segwit tx u2))
-    )
-    ;; Check output 1 first
-    (match out1
-      o1 (if (is-eq (get scriptPubKey o1) MULTISIG_SCRIPTPUBKEY)
-        (ok {
-          index: u1,
-          scriptPubKey: (get scriptPubKey o1),
-          value: (get value o1)
-        })
-        ;; Check output 2
-        (match out2
-          o2 (if (is-eq (get scriptPubKey o2) MULTISIG_SCRIPTPUBKEY)
-            (ok {
-              index: u2,
-              scriptPubKey: (get scriptPubKey o2),
-              value: (get value o2)
-            })
-            ERR-MULTISIG-NOT-FOUND
-          )
-          e2 ERR-MULTISIG-NOT-FOUND
-        )
-      )
-      e1 ERR-MULTISIG-NOT-FOUND
-    )
+
+;; User registers their capsule by proving they control the multisig
+;; user-pubkey: the user's compressed pubkey (derived from their Stacks address)
+;; capsule-script: the P2WSH scriptPubKey (0x0020 + 32-byte witness program)
+(define-public (register-capsule 
+    (stx-receiver principal)
+    (user-pubkey (buff 33)) 
+    (capsule-script (buff 34))
   )
+  (begin 
+      (asserts! (is-eq (principal-of? user-pubkey) (ok stx-receiver)) ERR-PUBKEY-MISMATCH)
+        (let (
+            ;; Build the pubkey list: [user-pubkey, operator-pubkey]
+            (pubkeys (list user-pubkey OPERATOR_PUBKEY))
+            
+            ;; Verify the multisig address matches
+            (verification (unwrap! (contract-call? 
+                .multisig-verify 
+                verify-multisig-address
+                pubkeys
+                MULTISIG_THRESHOLD
+                true  ;; is-segwit
+                (some capsule-script)
+            ) ERR-MULTISIG-VERIFICATION-FAILED))
+
+            (asserts! verification ERR-MULTISIG-MISMATCH)
+            ;; Map the capsule scriptPubKey to tx-sender
+            (ok (map-set capsule-owners 
+            capsule-script
+            { owner: stx-receiver, user-pubkey: user-pubkey, registered-at: block-height }
+            ))
+  ))
+))
+
+;; ============================================
+;; READ-ONLY HELPERS
+;; ============================================
+
+(define-read-only (get-capsule-owner (capsule-script (buff 34)))
+  (map-get? capsule-owners capsule-script)
+)
+
+(define-read-only (get-supported-rune (rune-block uint) (rune-tx uint))
+  (map-get? supported-runes { block: rune-block, tx: rune-tx })
+)
+
+(define-read-only (is-deposit-processed (btc-tx-id (buff 32)))
+  (is-some (map-get? processed-deposits btc-tx-id))
+)
+
+(define-read-only (get-deposit-info (btc-tx-id (buff 32)))
+  (map-get? processed-deposits btc-tx-id)
 )
 
 ;; ============================================
-;; MAIN: Log OP_RETURN and multisig output with mining proof verification
+;; CORE DEPOSIT PROCESSING
 ;; ============================================
-(define-public (log-opreturn
+
+;; Main entry point: Process a Runes deposit with full merkle proof verification
+(define-public (process-deposit
     (height uint)
     (wtx {
       version: (buff 4),
@@ -122,60 +202,158 @@
     (witness-reserved-value (buff 32))
     (ctx (buff 4096))
     (cproof (list 14 (buff 32)))
+    (mom-token <sr-trait>)
   )
   (let (
-      ;; Concatenate wtx + witness to get full tx buffer
+      ;; Build full tx buffer
       (tx-buff (contract-call?
         'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.bitcoin-helper-wtx-v2
         concat-wtx wtx witness-data
       ))
     )
-    ;; Verify tx was mined
+    ;; Verify tx was mined on Bitcoin
     (match (contract-call?
       'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.clarity-bitcoin-lib-v7
       was-segwit-tx-mined-compact height tx-buff header tx-index tree-depth
       wproof witness-merkle-root witness-reserved-value ctx cproof
     )
-      btc-tx-id (let (
-          (opreturn-data (get-opreturn-payload tx-buff))
-          (multisig-output (find-multisig-output tx-buff))
-        )
-        ;; Print everything!
-        (print {
-          type: "log-opreturn",
-          btc-tx-id: btc-tx-id,
-          height: height,
-          opreturn: opreturn-data,
-          multisig-output: multisig-output,
-          expected-multisig: MULTISIG_SCRIPTPUBKEY,
-          expected-sats: EXPECTED_SATS,
-        })
-        (ok {
-          btc-tx-id: btc-tx-id,
-          opreturn: opreturn-data,
-          multisig-output: multisig-output,
-        })
+      btc-tx-id (process-verified-deposit btc-tx-id tx-buff height mom-token)
+      error ERR-TX-NOT-MINED
+    )
+  )
+)
+
+;; Process deposit after BTC tx is verified as mined
+(define-private (process-verified-deposit 
+    (btc-tx-id (buff 32))
+    (tx-buff (buff 4096))
+    (btc-height uint)
+    (mom-token <sr-trait>)
+  )
+  (begin
+    ;; Check not already processed
+    (asserts! (not (is-deposit-processed btc-tx-id)) ERR-DEPOSIT-ALREADY-PROCESSED)
+    
+    ;; Parse the OP_RETURN to get Rune info
+    (let (
+        (parsed (unwrap! (parse-deposit-opreturn tx-buff) ERR-PARSE-FAILED))
+        (rune-block (get rune-block parsed))
+        (rune-tx (get rune-tx parsed))
+        (amount (get amount parsed))
+        (output-index (get output parsed))
       )
-      error (err (* error u1000))
+      
+      ;; Verify this is MOM's or another supported Rune
+      (let (
+          (rune-info (unwrap! (get-supported-rune rune-block rune-tx) ERR-RUNE-NOT-SUPPORTED))
+        )
+        
+        ;; Verify the output points to the capsule multisig
+        (let (
+            (multisig-output (unwrap! (get-output-at-index tx-buff output-index) ERR-MULTISIG-NOT-FOUND))
+            (output-script (get scriptPubKey multisig-output))
+          )
+          
+          ;; Get the capsule owner
+          (let (
+              (capsule-owner-info (unwrap! 
+                (get-capsule-owner (unwrap! (as-max-len? output-script u34) ERR-CAPSULE-NOT-FOUND))
+                ERR-CAPSULE-NOT-FOUND
+              ))
+              (owner (get owner capsule-owner-info))
+            )
+            
+            ;; Record the deposit
+            (map-set processed-deposits btc-tx-id {
+              owner: owner,
+              rune-block: rune-block,
+              rune-tx: rune-tx,
+              amount: amount,
+              stacks-block: block-height,
+              btc-height: btc-height
+            })
+            
+            ;; Mint tokens to the owner
+            (try! (contract-call? mom-token mint amount owner))
+            
+            ;; Emit event
+            (print {
+              type: "runes-deposit-processed",
+              btc-tx-id: btc-tx-id,
+              owner: owner,
+              rune-block: rune-block,
+              rune-tx: rune-tx,
+              amount: amount,
+              btc-height: btc-height
+            })
+            
+            (ok {
+              btc-tx-id: btc-tx-id,
+              owner: owner,
+              amount: amount,
+              rune: (get name rune-info)
+            })
+          )
+        )
+      )
     )
   )
 )
 
 ;; ============================================
-;; READ-ONLY: Test parsing without mining proof
+;; PARSING HELPERS (using runes-decoder)
 ;; ============================================
-(define-read-only (test-parse-opreturn (tx-buff (buff 4096)))
-  {
-    opreturn: (get-opreturn-payload tx-buff),
-    multisig-output: (find-multisig-output tx-buff),
-    output-0: (get-output-segwit tx-buff u0),
-    output-1: (get-output-segwit tx-buff u1),
-    output-2: (get-output-segwit tx-buff u2),
-  }
+
+;; Parse OP_RETURN from tx buffer using the runes-decoder library
+(define-read-only (parse-deposit-opreturn (tx-buff (buff 4096)))
+  (let (
+      ;; Get output 0 which should be the OP_RETURN
+      (output0 (unwrap! (get-output-at-index tx-buff u0) (err u500)))
+      (script (get scriptPubKey output0))
+    )
+    ;; Use runes-decoder to parse - adjust contract address as needed
+    ;; This calls parse-xverse-transfer-full which handles Tag 22 (your test case)
+    (match (contract-call? .runes-decoder parse-xverse-transfer-full script)
+      parsed-result (ok {
+        rune-block: (get rune_block parsed-result),
+        rune-tx: (get rune_tx parsed-result),
+        amount: (get amount parsed-result),
+        output: (get output parsed-result)
+      })
+      error (err u501)
+    )
+  )
 )
 
-;; TEST ONLY: Parse without mining proof verification
-(define-public (test-log-opreturn
+;; Get output at specific index from parsed tx
+(define-read-only (get-output-at-index (tx (buff 4096)) (index uint))
+  (let (
+      (parsed-tx (contract-call?
+        'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.clarity-bitcoin-lib-v7
+        parse-wtx tx false
+      ))
+    )
+    (match parsed-tx
+      result (let (
+          (outs (get outs result))
+          (out (unwrap! (element-at? outs index) (err u502)))
+        )
+        (ok {
+          scriptPubKey: (get scriptPubKey out),
+          value: (get value out)
+        })
+      )
+      error (err u503)
+    )
+  )
+)
+
+;; ============================================
+;; TEST FUNCTION (no merkle proof required)
+;; ============================================
+
+;; For testing: process deposit without BTC mining verification
+(define-public (test-process-deposit
     (wtx {
       version: (buff 4),
       ins: (list 50 { outpoint: { hash: (buff 32), index: (buff 4) }, scriptSig: (buff 1376), sequence: (buff 4) }),
@@ -183,23 +361,31 @@
       locktime: (buff 4),
     })
     (witness-data (buff 1650))
+    (mock-btc-tx-id (buff 32))
+    (mom-token <sr-trait>)
   )
   (let (
       (tx-buff (contract-call?
         'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.bitcoin-helper-wtx-v2
         concat-wtx wtx witness-data
       ))
-      (opreturn-data (get-opreturn-payload tx-buff))
-      (multisig-output (find-multisig-output tx-buff))
     )
-    (print {
-      type: "test-log-opreturn",
-      opreturn: opreturn-data,
-      multisig-output: multisig-output,
-    })
-    (ok {
-      opreturn: opreturn-data,
-      multisig-output: multisig-output,
-    })
+    ;; Skip mining verification, go straight to processing
+    (process-verified-deposit mock-btc-tx-id tx-buff u0 mom-token)
+  )
+)
+
+;; Simple test: just parse and log without minting
+(define-read-only (test-parse-deposit (tx-buff (buff 4096)))
+  (let (
+      (parsed (parse-deposit-opreturn tx-buff))
+      (output0 (get-output-at-index tx-buff u0))
+      (output1 (get-output-at-index tx-buff u1))
+    )
+    {
+      parsed-opreturn: parsed,
+      output-0: output0,
+      output-1: output1
+    }
   )
 )

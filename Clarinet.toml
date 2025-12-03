@@ -6,13 +6,16 @@ telemetry = false
 cache_dir = './.cache'
 
 [[project.requirements]]
-contract_id = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.
+contract_id = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-bootstrap-signers'
 
 [[project.requirements]]
 contract_id = 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.clarity-bitcoin-lib-v7'
 
 [[project.requirements]]
 contract_id = 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.bitcoin-helper-wtx-v2'
+
+[[project.requirements]]
+contract_id = 'SP3XXMS38VTAWTVPE5682XSBFXPTH7XCPEBTX8AN2.faktory-trait-v1'
 [contracts.add-converter]
 path = 'contracts/add-converter.clar'
 clarity_version = 3
@@ -45,6 +48,11 @@ epoch = '3.2'
 
 [contracts.runes-decoder]
 path = 'contracts/runes-decoder.clar'
+clarity_version = 3
+epoch = '3.2'
+
+[contracts.square-mom]
+path = 'contracts/square-mom.clar'
 clarity_version = 3
 epoch = '3.2'
 
