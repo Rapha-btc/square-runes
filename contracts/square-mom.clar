@@ -22,19 +22,30 @@
 
 ;; SIP-10 Functions
 ;; Add business model FEE
+(define-private (is-contract (addr principal))
+  (is-some (get name (unwrap-panic (principal-destruct? addr))))
+)
+
+;; Fee only when sending to contracts (DEXes)
 (define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
-    (begin
-       (asserts! (is-eq tx-sender sender) (err ERR-NOT-AUTHORIZED))
-       (let ((capsule-royalty (/ (* u25 amount) PRECISION))) 
-            (try! (ft-transfer? MOM capsule-royalty sender CAPSULE-TREASURY))
-       
-       (match (ft-transfer? MOM (- amount capsule-royalty) sender recipient)
-          response (begin
-            (print memo)
-            (ok response))
+  (begin
+    (asserts! (is-eq tx-sender sender) (err ERR-NOT-AUTHORIZED))
+    (if (is-contract recipient)
+      ;; Contract recipient then charge fee
+      (let ((capsule-royalty (/ (* u25 amount) PRECISION)))
+        (try! (ft-transfer? MOM capsule-royalty sender CAPSULE-TREASURY))
+        (match (ft-transfer? MOM (- amount capsule-royalty) sender recipient)
+          response (begin (print memo) (ok response))
           error (err error)
         )
-    ))
+      )
+      ;; Wallet recipient then no fee
+      (match (ft-transfer? MOM amount sender recipient)
+        response (begin (print memo) (ok response))
+        error (err error)
+      )
+    )
+  )
 )
 
 (define-public (set-token-uri (value (string-utf8 256)))
