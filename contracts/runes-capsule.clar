@@ -45,6 +45,8 @@
 (define-data-var contract-owner principal tx-sender)
 (define-data-var mom-token-contract principal .square-mom) ;; Set after MOM token deployment
 
+(define-data-var processed-tx-count uint u1)
+
 ;; ============================================
 ;; DATA MAPS
 ;; ============================================
@@ -69,11 +71,16 @@
   (buff 128)
   { 
     amount: uint,
-    capsule-script-pubkey: principal,
+    capsule-script-pubkey: (buff 34),
+    stx-receiver: principal,
+    edict-tag: (optional uint),
+    edict-output: uint,
+    pointer-output: (optional uint),
     rune-block: uint,
     rune-tx: uint,
-    btc-height: uint,
-    tx-number: uint
+    tx-number: uint,
+    tag: uint,
+    btc-height: uint
   }
 )
 
@@ -227,7 +234,7 @@
     (btc-tx-id (buff 128))
     (tx-buff (buff 4096))
     (btc-height uint)
-    (mom-token <sr-trait>)
+    (sq-rune <sr-trait>)
   )
   (begin
     ;; Check not already processed
@@ -237,9 +244,9 @@
     (let (
         (parsed (unwrap! (parse-deposit-opreturn tx-buff) ERR-PARSE-FAILED))
         (amount (get amount parsed))
-        ;; (edict-output (get edict-output parsed))
-        ;; (edict-tag (get edict-tag parsed))
-        ;; (pointer-output (get pointer-output parsed))
+        (edict-output (unwrap! (get edict-output parsed) ERR-PARSE-FAILED))
+        (edict-tag (get edict-tag parsed))
+        (pointer-output (get pointer-output parsed))
         (rune-block (get rune-block parsed))
         (rune-tx (get rune-tx parsed))
         (tag (get tag parsed))
@@ -252,7 +259,7 @@
         
         ;; Verify the output points to the capsule multisig
         (let (
-            (multisig-output (unwrap! (get-output-at-index tx-buff output-index) ERR-MULTISIG-NOT-FOUND))
+            (multisig-output (unwrap! (get-output-at-index tx-buff edict-output) ERR-MULTISIG-NOT-FOUND))
             (output-script (get scriptPubKey multisig-output))
           )
           
@@ -263,30 +270,44 @@
                 ERR-CAPSULE-NOT-FOUND
               ))
               (owner (get owner capsule-owner-info))
+              (current-count (var-get processed-tx-count))
             )
             
             ;; Record the deposit
-            (map-set processed-deposits btc-tx-id {
-              owner: owner,
+            (map-set processed-btc-txs btc-tx-id {
+              amount: amount,
+              capsule-script-pubkey: (unwrap! (as-max-len? output-script u34) ERR-CAPSULE-NOT-FOUND),
+              stx-receiver: owner,
+              edict-output: edict-output,
+              edict-tag: edict-tag,
+              pointer-output: pointer-output,
               rune-block: rune-block,
               rune-tx: rune-tx,
-              amount: amount,
-              stacks-block: block-height,
-              btc-height: btc-height
+              tag: tag,
+              btc-height: btc-height,
+              tx-number: current-count
             })
-            
+
+            (var-set processed-tx-count (+ current-count u1))
+
             ;; Mint tokens to the owner
-            (try! (contract-call? mom-token mint amount owner))
+            (try! (contract-call? sq-rune mint amount owner))
             
             ;; Emit event
             (print {
               type: "runes-deposit-processed",
               btc-tx-id: btc-tx-id,
-              owner: owner,
+              amount: amount,
+              capsule-script-pubkey: (unwrap! (as-max-len? output-script u34) ERR-CAPSULE-NOT-FOUND),
+              stx-receiver: owner,
+              edict-output: edict-output,
+              edict-tag: edict-tag,
+              pointer-output: pointer-output,
               rune-block: rune-block,
               rune-tx: rune-tx,
-              amount: amount,
-              btc-height: btc-height
+              tag: tag,
+              btc-height: btc-height,
+              tx-number: current-count
             })
             
             (ok {
@@ -318,6 +339,7 @@
 )
 
 ;; Get output at specific index from parsed tx
+;; is this different for legacy Rafa?
 (define-read-only (get-output-at-index (tx (buff 4096)) (index uint))
   (let (
       (parsed-tx (contract-call?
@@ -335,7 +357,7 @@
           value: (get value out)
         })
       )
-      error (err u503)
+      error (err u503) ;; missing
     )
   )
 )
