@@ -6,7 +6,7 @@
 ;; TRAITS
 ;; ============================================
 ;; create a square runes trait with burn and mint functions
-(use-trait sr-trait 'SP3XXMS38VTAWTVPE5682XSBFXPTH7XCPEBTX8AN2.faktory-trait-v1.sip-010-trait)
+(use-trait sr-trait .square-runes-trait.square-runes-trait) ;; 'SP3XXMS38VTAWTVPE5682XSBFXPTH7XCPEBTX8AN2.faktory-trait-v1.sip-010-trait) 
 ;; ============================================
 ;; ERROR CODES
 ;; ============================================
