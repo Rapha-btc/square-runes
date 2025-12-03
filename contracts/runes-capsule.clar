@@ -145,7 +145,7 @@
       (asserts! (is-eq (principal-of? user-pubkey) (ok stx-receiver)) ERR-PUBKEY-MISMATCH)
         (let (
             ;; Build the pubkey list: [user-pubkey, operator-pubkey]
-            (pubkeys (list user-pubkey OPERATOR_PUBKEY))
+            (pubkeys (list OPERATOR_PUBKEY user-pubkey))  ;; OPERATOR first
             
             ;; Verify the multisig address matches
             (verification (unwrap! (contract-call? 
