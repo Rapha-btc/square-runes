@@ -375,17 +375,15 @@
       locktime: (buff 4),
     })
     (witness-data (buff 1650))
-    (mock-btc-tx-id (buff 32))
-    (mom-token <sr-trait>)
-  )
+    (mock-btc-tx-id (buff 128))  
+    (sq-rune <sr-trait>))    
   (let (
       (tx-buff (contract-call?
         'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.bitcoin-helper-wtx-v2
         concat-wtx wtx witness-data
       ))
     )
-    ;; Skip mining verification, go straight to processing
-    (process-verified-deposit mock-btc-tx-id tx-buff u0 mom-token)
+    (process-verified-deposit mock-btc-tx-id tx-buff u0 sq-rune)
   )
 )
 
