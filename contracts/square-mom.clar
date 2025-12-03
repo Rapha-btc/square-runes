@@ -8,6 +8,8 @@
 (define-constant ERR-NOT-OWNER u402)
 (define-constant ERR-SUPPLY-EXCEEDED (err u403))
 (define-constant ERR-INSUFFICIENT-BALANCE (err u404))
+(define-constant PRECISION u10000)
+(define-constant CAPSULE-TREASURY tx-sender) ;; this can be a contract where we swap the asset for sbtc as soon as accumulate amount reaches a treshold?
 
 (define-fungible-token MOM MAX)
 (define-constant MAX u1600000000000000000)
@@ -16,18 +18,23 @@
 
 ;; Track total burned for withdrawal accounting
 (define-data-var total-burned uint u0)
+;; U25 can be a var bounded perhaps?
 
 ;; SIP-10 Functions
+;; Add business model FEE
 (define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
     (begin
        (asserts! (is-eq tx-sender sender) (err ERR-NOT-AUTHORIZED))
-       (match (ft-transfer? MOM amount sender recipient)
+       (let ((capsule-royalty (/ (* u25 amount) PRECISION))) 
+            (try! (ft-transfer? MOM capsule-royalty sender CAPSULE-TREASURY))
+       
+       (match (ft-transfer? MOM (- amount capsule-royalty) sender recipient)
           response (begin
             (print memo)
             (ok response))
           error (err error)
         )
-    )
+    ))
 )
 
 (define-public (set-token-uri (value (string-utf8 256)))
