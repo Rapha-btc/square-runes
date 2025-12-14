@@ -1,4 +1,4 @@
-;; runes-capsule-core.clar
+;; runes-capsule.clar
 ;; Trustless bridge for Runes deposits TO SIP-10 minting ~ Square Runes tokens
 ;; Verifies BTC deposits to multisig capsules and mints wrapped tokens
 

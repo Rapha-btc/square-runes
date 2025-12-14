@@ -1,8 +1,8 @@
 ;; 2a0e98cfc781129d295c8a7106b37e6e171c23c39cb144bc2c8dd0ce9eb95ee6
 ;; MOM Powered By Faktory.fun v1.0 
+;; square-mom.clar
 
 (impl-trait 'SP3XXMS38VTAWTVPE5682XSBFXPTH7XCPEBTX8AN2.faktory-trait-v1.sip-010-trait)
-;; (impl-trait 'SP29CK9990DQGE9RGTT1VEQTTYH8KY4E3JE5XP4EC.aibtcdev-dao-traits-v1.token)
 
 (define-constant ERR-NOT-AUTHORIZED u401)
 (define-constant ERR-NOT-OWNER u402)
@@ -146,8 +146,8 @@
 (define-public (mint (amount uint) (recipient principal))
   (begin
     ;; Only the Clarity oracle white Owl minter (runes-capsule-core) can mint
-    (is-eq contract-caller .runes-capsule)
-    
+    (asserts! (is-eq contract-caller .runes-capsule) (err ERR-NOT-AUTHORIZED)) 
+
     ;; Check we won't exceed max supply
     (asserts! (<= (+ (ft-get-supply MOM) amount) MAX) ERR-SUPPLY-EXCEEDED)
     
