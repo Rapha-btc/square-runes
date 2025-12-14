@@ -229,33 +229,6 @@
   )
 )
 
-(define-public (process-deposit-legacy
-    (height uint)
-    (blockheader (buff 80))
-    (tx {
-      version: (buff 4),
-      ins: (list 50 { outpoint: { hash: (buff 32), index: (buff 4) }, scriptSig: (buff 1376), sequence: (buff 4) }),
-      outs: (list 50 { value: (buff 8), scriptPubKey: (buff 1376) }),
-      locktime: (buff 4),
-    })
-    (proof { tx-index: uint, hashes: (list 12 (buff 32)), tree-depth: uint })
-    (sq-rune <sr-trait>)
-  )
-  (let (
-      (tx-buff (contract-call?
-        'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.bitcoin-helper-v2 concat-tx tx
-      ))
-    )
-    (match (contract-call?
-      'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.clarity-bitcoin-lib-v7
-      was-tx-mined-compact height tx-buff blockheader proof
-    )
-      btc-tx-id (process-verified-deposit btc-tx-id tx-buff height sq-rune)
-      error (err (* error u1000))
-    )
-  )
-)
-
 ;; Process deposit after BTC tx is verified as mined
 (define-private (process-verified-deposit 
     (btc-tx-id (buff 128))
