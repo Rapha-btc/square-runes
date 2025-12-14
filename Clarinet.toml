@@ -16,6 +16,9 @@ contract_id = 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.bitcoin-helper-wtx-v2'
 
 [[project.requirements]]
 contract_id = 'SP3XXMS38VTAWTVPE5682XSBFXPTH7XCPEBTX8AN2.faktory-trait-v1'
+
+[[project.requirements]]
+contract_id = 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.bitcoin-helper-v2'
 [contracts.add-converter]
 path = 'contracts/add-converter.clar'
 clarity_version = 3
@@ -59,7 +62,7 @@ epoch = '3.2'
 [contracts.square-runes-trait]
 path = 'contracts/square-runes-trait.clar'
 clarity_version = 3
-epoch = 'latest'
+epoch = '3.2'
 
 [contracts.test-converter]
 path = 'contracts/test-converter.clar'
